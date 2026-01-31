@@ -1,0 +1,51 @@
+/*
+Copyright 2025 Haihao Lu
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+#pragma once
+
+#include "internal_types.h"
+#include <cublas_v2.h>
+#include <cuda_runtime.h>
+#include <cusparse.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+typedef struct {
+    int new_col; 
+    double val;
+} permute_tuple_t;
+
+void generate_random_permutation(int n, int *perm);
+
+void permute_problem(lp_problem_t *qp, int *row_perm, int *col_perm);
+
+void randomly_permute_problem(lp_problem_t *qp, int **out_row_perm, int **out_col_perm);
+
+lp_problem_t *permute_problem_return_new(const lp_problem_t *qp, int *row_perm, int *col_perm);
+
+void generate_block_permutation(int n, int block_size, int *perm);
+void generate_random_permutation(int n, int *perm);
+void compute_inv_perm(int n, const int *perm, int *inv_perm);
+void permute_double_array(double *arr, int n, const int *perm);
+#ifdef __cplusplus
+}
+
+#endif

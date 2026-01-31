@@ -1,0 +1,304 @@
+# -----------------------------------------------------------------------------
+# ROOT CMakeLists.txt for PDHCG (Unified Build System)
+# -----------------------------------------------------------------------------
+cmake_minimum_required(VERSION 3.20)
+set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.6/bin/nvcc" CACHE FILEPATH "CUDA Compiler" FORCE)
+# Project config
+option(ENABLE_MPI "Enable distributed computing with MPI" ON)
+
+
+project(pdhcg LANGUAGES C CXX CUDA)
+
+set(PDHCG_VERSION_MAJOR 0)
+set(PDHCG_VERSION_MINOR 2)
+set(PDHCG_VERSION_PATCH 2)
+set(PDHCG_DIST_VERSION_MAJOR 0)
+set(PDHCG_DIST_VERSION_MINOR 0)
+set(PDHCG_DIST_VERSION_PATCH 1)
+
+set(PDHCG_VERSION "${PDHCG_VERSION_MAJOR}.${PDHCG_VERSION_MINOR}.${PDHCG_VERSION_PATCH}")
+add_compile_definitions(PDHCG_VERSION="${PDHCG_VERSION}")
+
+set(PDHCG_DIST_VERSION "${PDHCG_DIST_VERSION_MAJOR}.${PDHCG_DIST_VERSION_MINOR}.${PDHCG_DIST_VERSION_PATCH}")
+add_compile_definitions(PDHCG_DIST_VERSION="${PDHCG_DIST_VERSION}")
+
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+
+# C/C++ standards
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+# Set default build type to Release if not specified (Optimized builds)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.23")
+    set(CMAKE_CUDA_ARCHITECTURES all)
+else()
+    set(CMAKE_CUDA_ARCHITECTURES 60 61 70 75 80 86 89 90 90-virtual)
+endif()
+
+# Global Compile flags (corresponding to CFLAGS/NVCCFLAGS)
+add_compile_options(-fPIC -O3 -Wall -Wextra -g)
+
+# Windows compatibility
+if (WIN32)
+    add_definitions(-Dstrtok_r=strtok_s)
+endif()
+
+# CUDA standards and RDC (Relocatable Device Code)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+# -----------------------------------------------------------------------------
+# CONTROL OPTIONS
+# -----------------------------------------------------------------------------
+include(CMakeDependentOption)
+
+option(PDHCG_BUILD_STATIC_LIB "Build the PDHCG static library" ON)
+option(PDHCG_BUILD_SHARED_LIB "Build the PDHCG shared library" ON)
+
+# format: cmake_dependent_option(OPTION "docstring" DEFAULT_VALUE "DEPENDENCY_VARIABLE" FORCE_OFF_VALUE)
+cmake_dependent_option(PDHCG_BUILD_PYTHON "Build the PDHCG Python bindings" OFF
+                       "PDHCG_BUILD_STATIC_LIB" OFF)
+
+cmake_dependent_option(PDHCG_BUILD_CLI "Build the PDHCG command-line executable" ON
+                       "PDHCG_BUILD_STATIC_LIB" OFF)
+
+cmake_dependent_option(PDHCG_BUILD_TESTS "Build the PDHCG test suite" OFF
+                       "PDHCG_BUILD_STATIC_LIB" OFF)
+
+# -----------------------------------------------------------------------------
+# FIND DEPENDENCIES
+# -----------------------------------------------------------------------------
+# Core dependencies (required for Julia/Yggdrasil and Python)
+find_package(CUDAToolkit REQUIRED)
+find_package(ZLIB REQUIRED)
+
+if (PDHCG_BUILD_PYTHON)
+    # Dependencies required only for Python bindings
+    find_package(pybind11 CONFIG REQUIRED)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED) # For versioning script and pybind11
+endif()
+
+include(FetchContent)
+
+set(PSLP_VERSION_TAG "v0.0.3")
+
+FetchContent_Declare(
+  pslp
+  GIT_REPOSITORY https://github.com/dance858/PSLP.git
+  GIT_TAG        ${PSLP_VERSION_TAG}
+)
+
+FetchContent_MakeAvailable(pslp)
+include_directories(${pslp_SOURCE_DIR}/PSLP)
+add_compile_definitions(PSLP_VERSION=\"${PSLP_VERSION_TAG}\")
+
+# -----------------------------------------------------------------------------
+# SOURCE DISCOVERY & TARGET DEFINITION
+# -----------------------------------------------------------------------------
+# Using file(GLOB) for convenience, but explicit lists are recommended for robust builds
+file(GLOB C_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+)
+file(GLOB CU_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
+)
+# Exclude cli.c from library builds
+list(REMOVE_ITEM C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/cli.c")
+
+# Set common include directories for the core libraries
+set(CORE_INCLUDE_DIRS
+  PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include     # Public API headers
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/internal    # Internal implementation headers
+)
+
+# Set common link libraries
+set(CORE_LINK_LIBS PUBLIC
+  CUDA::cudart
+  CUDA::cublas
+  CUDA::cusparse
+  ZLIB::ZLIB
+  PSLP
+)
+
+if(ENABLE_MPI)
+    find_package(MPI REQUIRED)
+    add_definitions(-DUSE_MPI) 
+    message(STATUS "MPI is ENABLED")
+else()
+    message(STATUS "MPI is DISABLED (Single Node Mode)")
+endif()
+
+if(ENABLE_MPI AND MPI_FOUND)
+    list(APPEND CORE_LINK_LIBS MPI::MPI_CXX)
+    include_directories(${MPI_CXX_INCLUDE_PATH})
+    find_library(NCCL_LIB NAMES nccl 
+                 PATHS ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
+                       $ENV{NCCL_ROOT}/lib
+                       /usr/local/cuda/lib64
+                       /usr/lib/x86_64-linux-gnu)
+
+    if(NCCL_LIB)
+        message(STATUS "Found NCCL: ${NCCL_LIB}")
+        list(APPEND CORE_LINK_LIBS ${NCCL_LIB})
+    else()
+        message(WARNING "NCCL library not found explicitly, falling back to -lnccl")
+        list(APPEND CORE_LINK_LIBS nccl)
+    endif()
+endif()
+
+# -----------------------------------------------------------------------------
+# 1. Core STATIC Library (PDHCG_core)
+# -----------------------------------------------------------------------------
+if(PDHCG_BUILD_STATIC_LIB)
+    add_library(PDHCG_core STATIC
+      ${C_SOURCES}
+      ${CU_SOURCES}
+    )
+    target_include_directories(PDHCG_core ${CORE_INCLUDE_DIRS})
+    target_link_libraries(PDHCG_core ${CORE_LINK_LIBS})
+
+    set_target_properties(PDHCG_core PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      CUDA_SEPARABLE_COMPILATION ON
+      CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+endif()
+
+# -----------------------------------------------------------------------------
+# 2. Shared Library (libPDHCG.so)
+# -----------------------------------------------------------------------------
+if(PDHCG_BUILD_SHARED_LIB)
+    add_library(PDHCG_shared SHARED
+      ${C_SOURCES}
+      ${CU_SOURCES}
+    )
+    target_include_directories(PDHCG_shared ${CORE_INCLUDE_DIRS})
+    target_link_libraries(PDHCG_shared ${CORE_LINK_LIBS})
+
+    # Shared library must resolve device symbols as it is a final link point
+    set_target_properties(PDHCG_shared PROPERTIES
+        OUTPUT_NAME "pdhcg"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+endif()
+
+# -----------------------------------------------------------------------------
+# 3. CLI Executable (pdhcg)
+# -----------------------------------------------------------------------------
+if(PDHCG_BUILD_CLI)
+    if(NOT TARGET PDHCG_core)
+        message(FATAL_ERROR "PDHCG_BUILD_CLI=ON requires PDHCG_BUILD_STATIC_LIB=ON.")
+    endif()
+    
+    add_executable(PDHCG_cli src/cli.c)
+
+    target_include_directories(PDHCG_cli PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+    )
+
+    # Link CLI to the static core library
+    target_link_libraries(PDHCG_cli PRIVATE PDHCG_core)
+
+    # CLI is a final executable, it must resolve device symbols
+    set_target_properties(PDHCG_cli PROPERTIES
+        OUTPUT_NAME "pdhcg"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+endif()
+
+# -----------------------------------------------------------------------------
+# 4. Tests (CTest Integration)
+# -----------------------------------------------------------------------------
+if(PDHCG_BUILD_TESTS)
+    if(NOT TARGET PDHCG_core)
+        message(FATAL_ERROR "PDHCG_BUILD_TESTS=ON requires PDHCG_BUILD_STATIC_LIB=ON.")
+    endif()
+
+    enable_testing()
+    file(GLOB TEST_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/*.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/*.cu"
+    )
+
+    foreach(TEST_SRC ${TEST_SOURCES})
+        get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE) 
+        
+        add_executable(${TEST_NAME} ${TEST_SRC})
+        
+        # Link tests to the core static library
+        target_link_libraries(${TEST_NAME} PRIVATE PDHCG_core)
+
+        # Set up test includes
+        target_include_directories(${TEST_NAME} 
+          PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
+          PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        )
+        
+        # Tests are final executables, they must resolve device symbols
+        set_target_properties(${TEST_NAME} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tests"
+            CUDA_RESOLVE_DEVICE_SYMBOLS ON
+        )
+        
+        # Register with CTest
+        add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+        
+    endforeach()
+endif()
+
+# -----------------------------------------------------------------------------
+# 5. Python Bindings (Conditional)
+# -----------------------------------------------------------------------------
+if (PDHCG_BUILD_PYTHON)
+    if(NOT TARGET PDHCG_core)
+        message(FATAL_ERROR "PDHCG_BUILD_PYTHON=ON requires PDHCG_BUILD_STATIC_LIB=ON.")
+    endif()
+    
+    add_subdirectory(python_bindings)
+endif()
+
+# -----------------------------------------------------------------------------
+# 6. Install Targets
+# -----------------------------------------------------------------------------
+
+if (PDHCG_BUILD_PYTHON)
+    install(DIRECTORY include/
+        DESTINATION include/
+        FILES_MATCHING PATTERN "*.h"
+    )
+
+else()
+    if(TARGET PDHCG_core)
+        install(TARGETS PDHCG_core
+            ARCHIVE DESTINATION lib
+        )
+    endif()
+    
+    if(TARGET PDHCG_shared)
+        install(TARGETS PDHCG_shared
+            LIBRARY DESTINATION lib
+            RUNTIME DESTINATION bin # 'bin' for DLLs on Windows, 'lib' for .so on Linux
+        )
+    endif()
+    
+    if(TARGET PDHCG_cli)
+        install(TARGETS PDHCG_cli
+            RUNTIME DESTINATION bin
+        )
+    endif()
+
+    install(DIRECTORY include/
+        DESTINATION include/
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
