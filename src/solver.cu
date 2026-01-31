@@ -93,8 +93,7 @@ cupdlpx_result_t *optimize(const pdhg_parameters_t *params,
             ((state->total_count + 1) % params->termination_evaluation_frequency) ==
             0;
 
-        compute_next_pdhg_primal_solution(state);
-        compute_next_pdhg_dual_solution(state);
+        pdhg_update(state);
 
         if (state->is_this_major_iteration || do_restart)
         {

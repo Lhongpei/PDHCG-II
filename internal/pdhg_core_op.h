@@ -40,6 +40,7 @@ extern "C"
         const double objective_vector_rescaling,
         const double constraint_bound_rescaling,
         int n_vars);
+    void pdhg_update(pdhg_solver_state_t *state);
     void compute_next_pdhg_primal_solution(pdhg_solver_state_t *state);
     void compute_next_pdhg_dual_solution(pdhg_solver_state_t *state);
     void halpern_update(pdhg_solver_state_t *state, double reflection_coefficient);

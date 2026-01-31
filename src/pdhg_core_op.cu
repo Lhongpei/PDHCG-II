@@ -237,6 +237,78 @@ void compute_next_pdhg_dual_solution(pdhg_solver_state_t *state)
     }
 }
 
+void lp_primal_update(pdhg_solver_state_t *state, double step_size)
+{
+    if (state->is_this_major_iteration ||
+        ((state->total_count + 2) %
+         get_print_frequency(state->total_count + 2)) == 0)
+    {
+        compute_lp_next_pdhg_primal_solution_major_kernel<<<state->num_blocks_primal,
+                                                         THREADS_PER_BLOCK>>>(
+            state->current_primal_solution, state->pdhg_primal_solution,
+            state->reflected_primal_solution, state->dual_product,
+            state->objective_vector, state->variable_lower_bound,
+            state->variable_upper_bound, state->num_variables, step_size,
+            state->dual_slack);
+    }
+    else
+    {
+        compute_lp_next_pdhg_primal_solution_kernel<<<state->num_blocks_primal,
+                                                   THREADS_PER_BLOCK>>>(
+            state->current_primal_solution, state->reflected_primal_solution,
+            state->dual_product, state->objective_vector,
+            state->variable_lower_bound, state->variable_upper_bound,
+            state->num_variables, step_size);
+    }
+}
+void pdhg_update(pdhg_solver_state_t *state)
+{
+    double primal_step_size = state->step_size / state->primal_weight;
+    double dual_step_size = state->step_size * state->primal_weight;
+    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol,
+                                          state->current_dual_solution));
+    CUSPARSE_CHECK(
+        cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product));
+
+    CUSPARSE_CHECK(cusparseSpMV(
+        state->sparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &HOST_ONE,
+        state->matAt, state->vec_dual_sol, &HOST_ZERO, state->vec_dual_prod,
+        CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, state->dual_spmv_buffer));
+
+
+    lp_primal_update(state, primal_step_size);
+    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol,
+                                          state->reflected_primal_solution));
+    CUSPARSE_CHECK(
+        cusparseDnVecSetValues(state->vec_primal_prod, state->primal_product));
+
+    CUSPARSE_CHECK(cusparseSpMV(
+        state->sparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &HOST_ONE,
+        state->matA, state->vec_primal_sol, &HOST_ZERO, state->vec_primal_prod,
+        CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, state->primal_spmv_buffer));
+
+
+    if (state->is_this_major_iteration ||
+        ((state->total_count + 2) %
+         get_print_frequency(state->total_count + 2)) == 0)
+    {
+        compute_next_pdhg_dual_solution_major_kernel<<<state->num_blocks_dual,
+                                                       THREADS_PER_BLOCK>>>(
+            state->current_dual_solution, state->pdhg_dual_solution,
+            state->reflected_dual_solution, state->primal_product,
+            state->constraint_lower_bound, state->constraint_upper_bound,
+            state->num_constraints, dual_step_size);
+    }
+    else
+    {
+        compute_next_pdhg_dual_solution_kernel<<<state->num_blocks_dual,
+                                                 THREADS_PER_BLOCK>>>(
+            state->current_dual_solution, state->reflected_dual_solution,
+            state->primal_product, state->constraint_lower_bound,
+            state->constraint_upper_bound, state->num_constraints, dual_step_size);
+    }
+}
+
 void halpern_update(pdhg_solver_state_t *state,
                            double reflection_coefficient)
 {
