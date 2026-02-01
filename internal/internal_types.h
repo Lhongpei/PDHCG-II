@@ -55,6 +55,18 @@ typedef struct {
 	cusparseDnVecDescr_t vec_primal_obj_prod;
 } quadratic_objective_term_t;
 
+typedef struct {
+	double *gradient;
+	double *direction;
+	double tol;
+	int iteration_limit;
+} bb_step_size_t;
+
+typedef struct {
+	bb_step_size_t *bb_step_size;
+	double *primal_buffer;
+	double *dual_buffer;
+} inner_solver_t;
 typedef enum {
 	LP,
 	CONVEX_QP,
@@ -160,6 +172,7 @@ typedef struct
 
 	grid_context_t *grid_context;
 	problem_type_t problem_type;
+	inner_solver_t *inner_solver;
 } pdhg_solver_state_t;
 
 typedef struct

@@ -40,6 +40,7 @@ static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const lp_p
     switch (state->quadratic_objective_term->quad_obj_type)
     {
     case PDHCG_NON_Q:
+        break;
     case PDHCG_DIAG_Q:
     {
         double *h_diag = (double *)safe_calloc(n, sizeof(double)); 
@@ -110,6 +111,35 @@ static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const lp_p
         break;
     }
 
+    default:
+        fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void initialize_inner_solver(pdhg_solver_state_t *state)
+{
+    state->inner_solver = 
+            (inner_solver_t *)safe_malloc(sizeof(inner_solver_t));
+    if (!(state->quadratic_objective_term->quad_obj_type == PDHCG_NON_Q || state->quadratic_objective_term->quad_obj_type == PDHCG_DIAG_Q))
+    {
+        ALLOC_ZERO(state->inner_solver->primal_buffer, state->num_variables * sizeof(double));
+        ALLOC_ZERO(state->inner_solver->dual_buffer, state->num_constraints * sizeof(double));
+    }
+    switch (state->quadratic_objective_term->quad_obj_type)
+    {
+    case PDHCG_NON_Q:
+        break;
+    case PDHCG_DIAG_Q:
+        break;
+    case PDHCG_SPARSE_Q:
+        
+        state->inner_solver->bb_step_size = 
+            (bb_step_size_t *)safe_malloc(sizeof(inner_solver_t));
+        ALLOC_ZERO(state->inner_solver->bb_step_size->gradient, state->num_variables * sizeof(double));
+        ALLOC_ZERO(state->inner_solver->bb_step_size->direction, state->num_variables * sizeof(double));
+        state->inner_solver->bb_step_size->iteration_limit = 10;
+        state->inner_solver->bb_step_size->tol = 1e-3;
     default:
         fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
         exit(EXIT_FAILURE);
@@ -219,7 +249,7 @@ initialize_solver_state(const pdhg_parameters_t *params,
                    rescale_info->scaled_problem->constraint_matrix_num_nonzeros); 
     
     initialize_quadratic_obj_term(state, rescale_info->scaled_problem);
-
+    initialize_inner_solver(state);
     CUDA_CHECK(cudaMalloc(&state->constraint_matrix_t->row_ptr,
                           (n_vars + 1) * sizeof(int)));
     CUDA_CHECK(

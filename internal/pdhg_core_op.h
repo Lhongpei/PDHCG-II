@@ -20,6 +20,14 @@ extern "C"
         const double *current_primal, double *pdhg_primal, double *reflected_primal,
         const double *dual_product, const double *objective, const double *var_lb,
         const double *var_ub, int n, double step_size, double *dual_slack);
+    __global__ void compute_diagonal_q_next_pdhg_primal_solution_kernel(
+        const double *current_primal, double *reflected_primal, double *objective_product,
+        const double *dual_product, const double *objective, const double *var_lb,
+        const double *var_ub, int n, double step_size);
+    __global__ void compute_diagonal_q_next_pdhg_primal_solution_major_kernel(
+        const double *current_primal, double *pdhg_primal, double *reflected_primal, double *objective_product,
+        const double *dual_product, const double *objective, const double *var_lb,
+        const double *var_ub, int n, double step_size);
     __global__ void compute_next_pdhg_dual_solution_kernel(
         const double *current_dual, double *reflected_dual,
         const double *primal_product, const double *const_lb,
@@ -41,8 +49,6 @@ extern "C"
         const double constraint_bound_rescaling,
         int n_vars);
     void pdhg_update(pdhg_solver_state_t *state);
-    void compute_next_pdhg_primal_solution(pdhg_solver_state_t *state);
-    void compute_next_pdhg_dual_solution(pdhg_solver_state_t *state);
     void halpern_update(pdhg_solver_state_t *state, double reflection_coefficient);
 
     void rescale_solution(pdhg_solver_state_t *state);

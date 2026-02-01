@@ -51,10 +51,11 @@ __global__ void compute_lp_next_pdhg_primal_solution_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n)
     {
+        double current_primal_i  = current_primal[i];
         double temp =
-            current_primal[i] - step_size * (objective[i] - dual_product[i]);
+            current_primal_i - step_size * (objective[i] - dual_product[i]);
         double temp_proj = fmax(var_lb[i], fmin(temp, var_ub[i]));
-        reflected_primal[i] = 2.0 * temp_proj - current_primal[i];
+        reflected_primal[i] = 2.0 * temp_proj - current_primal_i;
     }
 }
 
@@ -66,11 +67,44 @@ __global__ void compute_lp_next_pdhg_primal_solution_major_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n)
     {
+        double current_primal_i  = current_primal[i];
         double temp =
-            current_primal[i] - step_size * (objective[i] - dual_product[i]);
-        pdhg_primal[i] = fmax(var_lb[i], fmin(temp, var_ub[i]));
-        dual_slack[i] = (pdhg_primal[i] - temp) / step_size;
-        reflected_primal[i] = 2.0 * pdhg_primal[i] - current_primal[i];
+            current_primal_i - step_size * (objective[i] - dual_product[i]);
+        double temp_proj = fmax(var_lb[i], fmin(temp, var_ub[i]));
+        reflected_primal[i] = 2.0 * temp_proj - current_primal_i;
+        pdhg_primal[i] = temp_proj;
+        dual_slack[i] = (temp_proj - temp) / step_size;
+    }
+}
+
+__global__ void compute_diagonal_q_next_pdhg_primal_solution_major_kernel(
+    const double *current_primal, double *pdhg_primal, double *reflected_primal, double *objective_product,
+    const double *dual_product, const double *objective, const double *var_lb,
+    const double *var_ub, int n, double step_size)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+    {
+        double current_primal_i  = current_primal[i];
+        double temp = (current_primal_i - step_size * (objective[i] - dual_product[i])) / (1.0 + step_size * objective_product[i]);
+        double temp_proj = fmax(var_lb[i], fmin(temp, var_ub[i]));
+        reflected_primal[i] = 2.0 * temp_proj - current_primal_i;
+        pdhg_primal[i] = temp_proj;
+    }
+}
+
+__global__ void compute_diagonal_q_next_pdhg_primal_solution_kernel(
+    const double *current_primal, double *reflected_primal, double *objective_product,
+    const double *dual_product, const double *objective, const double *var_lb,
+    const double *var_ub, int n, double step_size)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+    {
+        double current_primal_i  = current_primal[i];
+        double temp = (current_primal_i - step_size * (objective[i] - dual_product[i])) / (1.0 + step_size * objective_product[i]);
+        double temp_proj = fmax(var_lb[i], fmin(temp, var_ub[i]));
+        reflected_primal[i] = 2.0 * temp_proj - current_primal_i;
     }
 }
 
@@ -165,78 +199,6 @@ __global__ void compute_delta_solution_kernel(
     }
 }
 
-void compute_next_pdhg_primal_solution(pdhg_solver_state_t *state)
-{
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol,
-                                          state->current_dual_solution));
-    CUSPARSE_CHECK(
-        cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product));
-
-    CUSPARSE_CHECK(cusparseSpMV(
-        state->sparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &HOST_ONE,
-        state->matAt, state->vec_dual_sol, &HOST_ZERO, state->vec_dual_prod,
-        CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, state->dual_spmv_buffer));
-
-    double step = state->step_size / state->primal_weight;
-
-    if (state->is_this_major_iteration ||
-        ((state->total_count + 2) %
-         get_print_frequency(state->total_count + 2)) == 0)
-    {
-        compute_lp_next_pdhg_primal_solution_major_kernel<<<state->num_blocks_primal,
-                                                         THREADS_PER_BLOCK>>>(
-            state->current_primal_solution, state->pdhg_primal_solution,
-            state->reflected_primal_solution, state->dual_product,
-            state->objective_vector, state->variable_lower_bound,
-            state->variable_upper_bound, state->num_variables, step,
-            state->dual_slack);
-    }
-    else
-    {
-        compute_lp_next_pdhg_primal_solution_kernel<<<state->num_blocks_primal,
-                                                   THREADS_PER_BLOCK>>>(
-            state->current_primal_solution, state->reflected_primal_solution,
-            state->dual_product, state->objective_vector,
-            state->variable_lower_bound, state->variable_upper_bound,
-            state->num_variables, step);
-    }
-}
-
-void compute_next_pdhg_dual_solution(pdhg_solver_state_t *state)
-{
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol,
-                                          state->reflected_primal_solution));
-    CUSPARSE_CHECK(
-        cusparseDnVecSetValues(state->vec_primal_prod, state->primal_product));
-
-    CUSPARSE_CHECK(cusparseSpMV(
-        state->sparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &HOST_ONE,
-        state->matA, state->vec_primal_sol, &HOST_ZERO, state->vec_primal_prod,
-        CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, state->primal_spmv_buffer));
-
-    double step = state->step_size * state->primal_weight;
-
-    if (state->is_this_major_iteration ||
-        ((state->total_count + 2) %
-         get_print_frequency(state->total_count + 2)) == 0)
-    {
-        compute_next_pdhg_dual_solution_major_kernel<<<state->num_blocks_dual,
-                                                       THREADS_PER_BLOCK>>>(
-            state->current_dual_solution, state->pdhg_dual_solution,
-            state->reflected_dual_solution, state->primal_product,
-            state->constraint_lower_bound, state->constraint_upper_bound,
-            state->num_constraints, step);
-    }
-    else
-    {
-        compute_next_pdhg_dual_solution_kernel<<<state->num_blocks_dual,
-                                                 THREADS_PER_BLOCK>>>(
-            state->current_dual_solution, state->reflected_dual_solution,
-            state->primal_product, state->constraint_lower_bound,
-            state->constraint_upper_bound, state->num_constraints, step);
-    }
-}
-
 void lp_primal_update(pdhg_solver_state_t *state, double step_size)
 {
     if (state->is_this_major_iteration ||
@@ -261,10 +223,86 @@ void lp_primal_update(pdhg_solver_state_t *state, double step_size)
             state->num_variables, step_size);
     }
 }
+
+void diag_q_primal_update(pdhg_solver_state_t *state, double step_size)
+{
+    if (state->is_this_major_iteration ||
+        ((state->total_count + 2) %
+         get_print_frequency(state->total_count + 2)) == 0)
+    {
+        compute_diagonal_q_next_pdhg_primal_solution_major_kernel<<<state->num_blocks_primal,
+                                                         THREADS_PER_BLOCK>>>(
+            state->current_primal_solution, state->pdhg_primal_solution,
+            state->reflected_primal_solution, state->quadratic_objective_term->diagonal_objective_matrix,
+            state->dual_product,
+            state->objective_vector, state->variable_lower_bound,
+            state->variable_upper_bound, state->num_variables, step_size);
+    }
+    else
+    {
+        compute_diagonal_q_next_pdhg_primal_solution_kernel<<<state->num_blocks_primal,
+                                                   THREADS_PER_BLOCK>>>(
+            state->current_primal_solution, state->reflected_primal_solution, state->quadratic_objective_term->diagonal_objective_matrix,
+            state->dual_product, state->objective_vector,
+            state->variable_lower_bound, state->variable_upper_bound,
+            state->num_variables, step_size);
+    }
+}
+
+__global__ void primal_gradient_descent_kernel(
+    const double *dual_product, const double *current_primal_solution,
+    double *pdhg_primal_solution, const double *objective_vector, const double *objective_product,
+    const double *var_lb, const double *var_ub, const double stepsize, const int n_vars
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n_vars)
+    {
+        double current_grad = objective_product[i] + objective_vector[i] - dual_product[i];
+        double current_primal_sol = current_primal_solution[i];
+        double next_primal_sol = current_primal_sol - stepsize * current_grad;
+        next_primal_sol = fmax(var_lb[i], fmin(next_primal_sol, var_ub[i]));
+        pdhg_primal_solution[i] = next_primal_sol;
+    }
+}
+
+__global__ void primal_gradient_descent_kernel_bb_init(
+    const double *dual_product, double *gradient, double *direction, const double *current_primal_solution,
+    double *pdhg_primal_solution, const double *objective_vector, const double *objective_product,
+    const double *var_lb, const double *var_ub, const double stepsize, const int n_vars
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n_vars)
+    {
+        double current_grad = objective_product[i] + objective_vector[i] - dual_product[i];
+        double current_primal_sol = current_primal_solution[i];
+        double next_primal_sol = current_primal_sol - stepsize * current_grad;
+        next_primal_sol = fmax(var_lb[i], fmin(next_primal_sol, var_ub[i]));
+        pdhg_primal_solution[i] = next_primal_sol;
+        gradient[i] = current_grad;
+        direction[i] = next_primal_sol - current_primal_sol;
+    }
+}
+
+// __global__ void primal_bb_update_gradient_kernel(
+    
+// )
+
+void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
+{
+    double inv_step_size = 1.0 / step_size;
+    int inner_solver_iter = 1;
+    double alpha = 1.0 / (state->quadratic_objective_term->norm + inv_step_size);
+    // primal_gradient_descent_kernel_bb_init
+}
+
 void pdhg_update(pdhg_solver_state_t *state)
 {
     double primal_step_size = state->step_size / state->primal_weight;
     double dual_step_size = state->step_size * state->primal_weight;
+
+    // Primal Update
     CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol,
                                           state->current_dual_solution));
     CUSPARSE_CHECK(
@@ -275,8 +313,24 @@ void pdhg_update(pdhg_solver_state_t *state)
         state->matAt, state->vec_dual_sol, &HOST_ZERO, state->vec_dual_prod,
         CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, state->dual_spmv_buffer));
 
+    switch (state->quadratic_objective_term->quad_obj_type)
+    {
+    case PDHCG_NON_Q:
+        {
+            lp_primal_update(state, primal_step_size);
+            break;
+        }
+    case PDHCG_DIAG_Q:
+        {
+            diag_q_primal_update(state, primal_step_size);
+            break;
+        }
+    default:
+        fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
+            exit(EXIT_FAILURE);
+    }
 
-    lp_primal_update(state, primal_step_size);
+    // Dual Update
     CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol,
                                           state->reflected_primal_solution));
     CUSPARSE_CHECK(
@@ -634,8 +688,7 @@ void primal_feasibility_polish(const pdhg_parameters_t *params, pdhg_solver_stat
 
         state->is_this_major_iteration = ((state->total_count + 1) % params->termination_evaluation_frequency) == 0;
 
-        compute_next_pdhg_primal_solution(state);
-        compute_next_pdhg_dual_solution(state);
+        pdhg_update(state);
 
         if (state->is_this_major_iteration || do_restart)
         {
@@ -680,8 +733,7 @@ void dual_feasibility_polish(const pdhg_parameters_t *params, pdhg_solver_state_
 
         state->is_this_major_iteration = ((state->total_count + 1) % params->termination_evaluation_frequency) == 0;
 
-        compute_next_pdhg_primal_solution(state);
-        compute_next_pdhg_dual_solution(state);
+        pdhg_update(state);
 
         if (state->is_this_major_iteration || do_restart)
         {
