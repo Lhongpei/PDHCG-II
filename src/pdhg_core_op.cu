@@ -251,7 +251,24 @@ void diag_q_primal_update(pdhg_solver_state_t *state, double step_size)
 }
 
 __global__ void primal_gradient_descent_kernel(
-    const double *dual_product, const double *current_primal_solution,
+    const double *dual_product, const double *current_primal_solution, double *reflected_primal, 
+    const double *objective_vector, const double *objective_product,
+    const double *var_lb, const double *var_ub, const double stepsize, const int n_vars
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n_vars)
+    {
+        double current_grad = objective_product[i] + objective_vector[i] - dual_product[i];
+        double current_primal_sol = current_primal_solution[i];
+        double next_primal_sol = current_primal_sol - stepsize * current_grad;
+        next_primal_sol = fmax(var_lb[i], fmin(next_primal_sol, var_ub[i]));
+        reflected_primal[i] = 2 * next_primal_sol - current_primal_sol;
+    }
+}
+
+__global__ void primal_gradient_descent_kernel_major(
+    const double *dual_product, const double *current_primal_solution, double *reflected_primal,
     double *pdhg_primal_solution, const double *objective_vector, const double *objective_product,
     const double *var_lb, const double *var_ub, const double stepsize, const int n_vars
 )
@@ -264,6 +281,7 @@ __global__ void primal_gradient_descent_kernel(
         double next_primal_sol = current_primal_sol - stepsize * current_grad;
         next_primal_sol = fmax(var_lb[i], fmin(next_primal_sol, var_ub[i]));
         pdhg_primal_solution[i] = next_primal_sol;
+        reflected_primal[i] = 2 * next_primal_sol - current_primal_sol;
     }
 }
 
@@ -296,12 +314,25 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
     int inner_solver_iter = 1;
     double alpha = 1.0 / (state->quadratic_objective_term->norm + inv_step_size);
     update_obj_product(state, state->current_primal_solution);
-    primal_gradient_descent_kernel<<<state->num_blocks_primal,
-                                THREADS_PER_BLOCK>>>(
-        state->dual_product, state->current_primal_solution, 
-        state->pdhg_primal_solution, state->objective_vector, state->quadratic_objective_term->primal_obj_product,
-        state->variable_lower_bound, state->variable_upper_bound, alpha, state->num_variables
-    );
+    if (state->is_this_major_iteration ||
+        ((state->total_count + 2) %
+         get_print_frequency(state->total_count + 2)) == 0)
+    {
+        primal_gradient_descent_kernel_major<<<state->num_blocks_primal,
+                                    THREADS_PER_BLOCK>>>(
+            state->dual_product, state->current_primal_solution, state->reflected_primal_solution,
+            state->pdhg_primal_solution, state->objective_vector, state->quadratic_objective_term->primal_obj_product,
+            state->variable_lower_bound, state->variable_upper_bound, alpha, state->num_variables
+        );
+    }
+    else{
+        primal_gradient_descent_kernel<<<state->num_blocks_primal,
+                                    THREADS_PER_BLOCK>>>(
+            state->dual_product, state->current_primal_solution, state->reflected_primal_solution,
+            state->objective_vector, state->quadratic_objective_term->primal_obj_product,
+            state->variable_lower_bound, state->variable_upper_bound, alpha, state->num_variables
+        );
+    }
 }
 
 void pdhg_update(pdhg_solver_state_t *state)

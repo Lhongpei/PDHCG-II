@@ -68,7 +68,7 @@ mpirun -n <NUM_GPU> ./build/cupdlpx-dist <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
 
 **Positional Arguments:**
 
-1. `<MPS_FILE>`: Path to the input LP (supports `.mps` and `.mps.gz`).
+1. `<MPS_FILE>`: Path to the input QP (supports `.mps`, `.QPS` and `.mps.gz`).
 2. `<OUTPUT_DIR>`: Directory where solution files will be saved.
 
 **Distributed Options:**

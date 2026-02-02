@@ -261,23 +261,23 @@ static void bound_obj_rescaling(
     {
         c_norm_sq += problem->objective_vector[i] * problem->objective_vector[i];
     }
-    rescale_info->con_bound_rescale =  sqrt(b_norm_sq) + 1.0;
-    rescale_info->obj_vec_rescale =  sqrt(c_norm_sq) + 1.0;
+    rescale_info->con_bound_rescale = 1.0 / (sqrt(b_norm_sq) + 1.0);
+    rescale_info->obj_vec_rescale =  1.0 / (sqrt(c_norm_sq) + 1.0);
 
     for (int i = 0; i < problem->num_constraints; ++i)
     {
-        problem->constraint_lower_bound[i] /= rescale_info->con_bound_rescale;
-        problem->constraint_upper_bound[i] /= rescale_info->con_bound_rescale;
+        problem->constraint_lower_bound[i] *= rescale_info->con_bound_rescale;
+        problem->constraint_upper_bound[i] *= rescale_info->con_bound_rescale;
     }
     for (int i = 0; i < problem->num_variables; ++i)
     {
-        problem->variable_lower_bound[i] /= rescale_info->con_bound_rescale;
-        problem->variable_upper_bound[i] /= rescale_info->con_bound_rescale;
-        problem->objective_vector[i] /= rescale_info->obj_vec_rescale;
+        problem->variable_lower_bound[i] *= rescale_info->con_bound_rescale;
+        problem->variable_upper_bound[i] *= rescale_info->con_bound_rescale;
+        problem->objective_vector[i] *= rescale_info->obj_vec_rescale;
     }
     for (int nnz_idx = 0; nnz_idx < problem->objective_matrix_num_nonzeros; ++nnz_idx)
     {
-        problem->objective_matrix->val[nnz_idx] *= rescale_info->con_bound_rescale / rescale_info->obj_vec_rescale;
+        problem->objective_matrix->val[nnz_idx] *= rescale_info->obj_vec_rescale / rescale_info->con_bound_rescale;
     }
 }
 

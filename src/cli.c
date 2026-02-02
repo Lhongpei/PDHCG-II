@@ -157,7 +157,7 @@ void print_usage(const char *prog_name)
 
     fprintf(stderr, "Arguments:\n");
     fprintf(stderr, "  <mps_file>               Path to the input problem in MPS "
-                    "format (.mps or .mps.gz).\n");
+                    "format (.mps .QPS or .mps.gz).\n");
     fprintf(stderr, "  <output_dir>             Directory where output files "
                     "will be saved. It will contain:\n");
     fprintf(stderr, "                             - <basename>_summary.txt\n");

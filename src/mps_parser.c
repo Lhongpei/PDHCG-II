@@ -568,6 +568,10 @@ lp_problem_t *read_mps_file(const char *filename)
         {
             prob->objective_vector[i] *= -1.0;
         }
+        for (int i = 0; i < prob->objective_matrix_num_nonzeros; ++i)
+        {
+            state.coo_matrix_q.values[i] *= -1.0;
+        }
     }
 
     prob->constraint_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
