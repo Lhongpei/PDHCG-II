@@ -1,5 +1,6 @@
 #include "cupdlpx.h"
 #include "pdhg_core_op.h"
+#include "solver_state.h"
 #include "internal_types.h"
 #include "preconditioner.h"
 #include "presolve.h"
@@ -294,7 +295,13 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
     double inv_step_size = 1.0 / step_size;
     int inner_solver_iter = 1;
     double alpha = 1.0 / (state->quadratic_objective_term->norm + inv_step_size);
-    // primal_gradient_descent_kernel_bb_init
+    update_obj_product(state, state->current_primal_solution);
+    primal_gradient_descent_kernel<<<state->num_blocks_primal,
+                                THREADS_PER_BLOCK>>>(
+        state->dual_product, state->current_primal_solution, 
+        state->pdhg_primal_solution, state->objective_vector, state->quadratic_objective_term->primal_obj_product,
+        state->variable_lower_bound, state->variable_upper_bound, alpha, state->num_variables
+    );
 }
 
 void pdhg_update(pdhg_solver_state_t *state)
@@ -323,6 +330,11 @@ void pdhg_update(pdhg_solver_state_t *state)
     case PDHCG_DIAG_Q:
         {
             diag_q_primal_update(state, primal_step_size);
+            break;
+        }
+    case PDHCG_SPARSE_Q:
+        {
+            primal_BB_step_size_update(state, primal_step_size);
             break;
         }
     default:
@@ -476,6 +488,33 @@ initialize_step_size_and_primal_weight(pdhg_solver_state_t *state,
                                (state->constraint_bound_norm + 1.0);
     }
     state->best_primal_weight = state->primal_weight;
+}
+
+void initialize_quadratic_term_information(pdhg_solver_state_t *state,
+                                        const pdhg_parameters_t *params)
+{
+    if (state->quadratic_objective_term->quad_obj_type == PDHCG_SPARSE_Q)
+    {
+        state->quadratic_objective_term->norm = estimate_maximum_eigenvalue(
+            state->sparse_handle, state->blas_handle, state->quadratic_objective_term->objective_matrix,
+            params->sv_max_iter, params->sv_tol
+        );
+        return;
+    }
+    if (state->quadratic_objective_term->quad_obj_type == PDHCG_DIAG_Q)
+    {
+        double max_eigen = 0.0;
+        double min_eigen = 0.0;
+        for (int i = 0; i < state->num_variables; i ++)
+        {
+            double item = state->quadratic_objective_term->diagonal_objective_matrix[i];
+            max_eigen = fmax(max_eigen, 
+                            fabs(item));
+            min_eigen = fmin(min_eigen, item);
+        }
+        state->quadratic_objective_term->norm = max_eigen;
+        state->quadratic_objective_term->nonconvexity = min_eigen;
+    }
 }
 
 void compute_fixed_point_error(pdhg_solver_state_t *state)

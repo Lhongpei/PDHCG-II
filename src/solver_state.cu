@@ -140,6 +140,7 @@ static void initialize_inner_solver(pdhg_solver_state_t *state)
         ALLOC_ZERO(state->inner_solver->bb_step_size->direction, state->num_variables * sizeof(double));
         state->inner_solver->bb_step_size->iteration_limit = 10;
         state->inner_solver->bb_step_size->tol = 1e-3;
+        break;
     default:
         fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
         exit(EXIT_FAILURE);
@@ -248,8 +249,6 @@ initialize_solver_state(const pdhg_parameters_t *params,
                    rescale_info->scaled_problem->num_constraints, 
                    rescale_info->scaled_problem->constraint_matrix_num_nonzeros); 
     
-    initialize_quadratic_obj_term(state, rescale_info->scaled_problem);
-    initialize_inner_solver(state);
     CUDA_CHECK(cudaMalloc(&state->constraint_matrix_t->row_ptr,
                           (n_vars + 1) * sizeof(int)));
     CUDA_CHECK(
@@ -507,6 +506,9 @@ initialize_solver_state(const pdhg_parameters_t *params,
         state->sparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE, &HOST_ONE,
         state->matAt, state->vec_dual_sol, &HOST_ZERO, state->vec_dual_prod,
         CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, state->dual_spmv_buffer));
+
+    initialize_quadratic_obj_term(state, rescale_info->scaled_problem);
+    initialize_inner_solver(state);
 
     CUDA_CHECK(
         cudaMalloc(&state->ones_primal_d, state->num_variables * sizeof(double)));
