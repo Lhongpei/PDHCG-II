@@ -1036,6 +1036,17 @@ void compute_infeasibility_information(pdhg_solver_state_t *state)
 
     state->max_primal_ray_infeasibility = get_vector_inf_norm(
         state->blas_handle, state->num_constraints, state->primal_slack);
+
+    if (state->problem_type != LP && state->quadratic_objective_term->quad_obj_type != PDHCG_NON_Q)
+    {
+        update_obj_product(state, state->delta_primal_solution);
+        double q_ray_norm = get_vector_inf_norm(
+            state->blas_handle, state->num_variables, 
+            state->quadratic_objective_term->primal_obj_product);
+        double scaled_q_norm = q_ray_norm / state->objective_vector_rescaling;
+        state->max_primal_ray_infeasibility = fmax(state->max_primal_ray_infeasibility, scaled_q_norm);
+    }
+
     double dual_slack_norm = get_vector_inf_norm(
         state->blas_handle, state->num_variables, state->dual_slack);
     state->max_dual_ray_infeasibility = dual_slack_norm;

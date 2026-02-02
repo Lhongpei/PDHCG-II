@@ -64,11 +64,11 @@ cupdlpx_result_t *optimize(const pdhg_parameters_t *params,
             (state->total_count % get_print_frequency(state->total_count) == 0))
         {
             compute_residual(state, params->optimality_norm);
-            // if (state->is_this_major_iteration &&
-            //     state->total_count < 3 * params->termination_evaluation_frequency)
-            // {
-            //     compute_infeasibility_information(state);
-            // }
+            if (state->is_this_major_iteration &&
+                state->total_count < 3 * params->termination_evaluation_frequency)
+            {
+                compute_infeasibility_information(state);
+            }
 
             state->cumulative_time_sec =
                 (double)(clock() - start_time) / CLOCKS_PER_SEC;
