@@ -120,7 +120,8 @@ static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const lp_p
 static void initialize_inner_solver(pdhg_solver_state_t *state)
 {
     state->inner_solver = 
-            (inner_solver_t *)safe_malloc(sizeof(inner_solver_t));
+            (inner_solver_t *)safe_calloc(1, sizeof(inner_solver_t));
+    state->inner_solver->has_inner_loop = false;
     if (!(state->quadratic_objective_term->quad_obj_type == PDHCG_NON_Q || state->quadratic_objective_term->quad_obj_type == PDHCG_DIAG_Q))
     {
         ALLOC_ZERO(state->inner_solver->primal_buffer, state->num_variables * sizeof(double));
@@ -133,7 +134,7 @@ static void initialize_inner_solver(pdhg_solver_state_t *state)
     case PDHCG_DIAG_Q:
         break;
     case PDHCG_SPARSE_Q:
-        
+        state->inner_solver->has_inner_loop = true;
         state->inner_solver->bb_step_size = 
             (bb_step_size_t *)safe_malloc(sizeof(bb_step_size_t));
         ALLOC_ZERO(state->inner_solver->bb_step_size->gradient, state->num_variables * sizeof(double));

@@ -158,6 +158,7 @@ extern "C"
 		double *reduced_cost;
 
 		int total_count;
+		int total_inner_count;
 		double rescaling_time_sec;
 		double cumulative_time_sec;
 		double presolve_time;

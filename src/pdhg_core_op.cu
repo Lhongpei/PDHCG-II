@@ -398,6 +398,7 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
         state->current_primal_solution, state->pdhg_primal_solution, 
         state->reflected_primal_solution, state->num_variables
     );
+    state->inner_solver->total_count += (inner_solver_iter - 1);
 }
 
 void primal_gradient_update(pdhg_solver_state_t *state, double step_size)
@@ -755,6 +756,7 @@ cupdlpx_result_t *create_result_from_state(pdhg_solver_state_t *state, const lp_
     results->termination_reason = state->termination_reason;
     results->feasibility_polishing_time = state->feasibility_polishing_time;
     results->feasibility_iteration = state->feasibility_iteration;
+    results->total_inner_count = state->inner_solver->total_count;
     // if (presolve_stats != NULL) {
     //     results->presolve_stats = *presolve_stats;
     // } else {

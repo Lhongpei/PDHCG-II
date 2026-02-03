@@ -104,6 +104,10 @@ void save_solver_summary(const cupdlpx_result_t *result, const char *output_dir,
             termination_reason_to_string(result->termination_reason));
     fprintf(outfile, "Runtime (sec): %e\n", result->cumulative_time_sec);
     fprintf(outfile, "Iterations Count: %d\n", result->total_count);
+    if (result->total_inner_count > 0)
+    {
+        fprintf(outfile, "Inner Iterations Count: %d\n", result->total_inner_count);
+    }
     fprintf(outfile, "Primal Objective Value: %e\n",
             result->primal_objective_value);
     fprintf(outfile, "Dual Objective Value: %e\n", result->dual_objective_value);

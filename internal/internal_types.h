@@ -66,6 +66,8 @@ typedef struct {
 	double *dual_buffer;
 	double tol;
 	int iteration_limit;
+	int total_count;
+	int has_inner_loop;
 } inner_solver_t;
 typedef enum {
 	LP,
