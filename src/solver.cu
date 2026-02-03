@@ -30,14 +30,18 @@ limitations under the License.
 #include <stdio.h>
 #include <time.h>
 
-cupdlpx_result_t *optimize(const pdhg_parameters_t *params,
+cupdlpx_result_t *optimize(const pdhg_parameters_t *input_params,
                            const lp_problem_t *original_problem)
 {
-    print_initial_info(params, original_problem);
+    
 
     cupdlpx_presolve_info_t *presolve_info = NULL;
     lp_problem_t *working_problem = deepcopy_problem(original_problem);
-    if (params->presolve && working_problem->objective_matrix_num_nonzeros == 0)
+    pdhg_parameters_t copyed_params = *input_params;
+    pdhg_parameters_t *params = &copyed_params;
+    print_initial_info(input_params, original_problem);
+    if (working_problem->objective_matrix_num_nonzeros != 0) params->presolve = false;
+    if (params->presolve)
     {
         presolve_info = pslp_presolve(original_problem, params);
         if (presolve_info->problem_solved_during_presolve)
@@ -134,6 +138,7 @@ cupdlpx_result_t *optimize(const pdhg_parameters_t *params,
 
     pdhg_final_log(result, params);
     pdhg_solver_state_free(state);
+    lp_problem_free(working_problem);
     return result;
 }
 
