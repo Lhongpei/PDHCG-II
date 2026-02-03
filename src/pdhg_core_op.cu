@@ -366,13 +366,13 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
                                         state->quadratic_objective_term->primal_obj_product,
                                         state->variable_lower_bound, state->variable_upper_bound, alpha, state->num_variables
                                     );
-    while(inner_solver_iter < state->inner_solver->bb_step_size->iteration_limit)
+    while(inner_solver_iter < state->inner_solver->iteration_limit)
     {
         
         CUBLAS_CHECK(cublasDnrm2_v2_64(state->blas_handle, state->num_variables,
                                    state->inner_solver->bb_step_size->direction, 1,
                                    &norm_gtg));
-        if (norm_gtg <= state->inner_solver->bb_step_size->tol) break;
+        if (norm_gtg <= state->inner_solver->tol) break;
         update_obj_product(state, state->pdhg_primal_solution);
         primal_bb_update_gradient_kernel<<<state->num_blocks_primal,
                                     THREADS_PER_BLOCK>>>(
@@ -457,7 +457,7 @@ void pdhg_update(pdhg_solver_state_t *state)
         }
     case PDHCG_SPARSE_Q:
         {
-            primal_BB_step_size_update(state, 0.5 * primal_step_size);
+            primal_BB_step_size_update(state, primal_step_size);
             break;
         }
     default:
@@ -679,6 +679,13 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
     interaction = 2 * state->step_size * cross_term;
 
     state->fixed_point_error = sqrt(movement + interaction);
+    if (state->problem_type == CONVEX_QP && 
+        (state->quadratic_objective_term->quad_obj_type != PDHCG_NON_Q && 
+            state->quadratic_objective_term->quad_obj_type != PDHCG_DIAG_Q))
+    {
+        state->inner_solver->tol = fmin(state->inner_solver->tol, fmax(0.0005 * primal_norm / state->step_size * state->primal_weight, 1e-12)) ;
+        // printf("Update Inner Solver Tolerence to:  %.3e, primal movement is: %.3e\n",state->inner_solver->tol, primal_norm);
+    }
 }
 
 

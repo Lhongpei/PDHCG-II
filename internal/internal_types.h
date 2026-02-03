@@ -58,14 +58,14 @@ typedef struct {
 typedef struct {
 	double *gradient;
 	double *direction;
-	double tol;
-	int iteration_limit;
 } bb_step_size_t;
 
 typedef struct {
 	bb_step_size_t *bb_step_size;
 	double *primal_buffer;
 	double *dual_buffer;
+	double tol;
+	int iteration_limit;
 } inner_solver_t;
 typedef enum {
 	LP,

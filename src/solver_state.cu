@@ -138,8 +138,8 @@ static void initialize_inner_solver(pdhg_solver_state_t *state)
             (bb_step_size_t *)safe_malloc(sizeof(bb_step_size_t));
         ALLOC_ZERO(state->inner_solver->bb_step_size->gradient, state->num_variables * sizeof(double));
         ALLOC_ZERO(state->inner_solver->bb_step_size->direction, state->num_variables * sizeof(double));
-        state->inner_solver->bb_step_size->iteration_limit = 10;
-        state->inner_solver->bb_step_size->tol = 1e-3;
+        state->inner_solver->iteration_limit = 1000;
+        state->inner_solver->tol = 1e-3;
         break;
     default:
         fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
