@@ -403,7 +403,7 @@ static int parse_ranges_section(MpsParserState *state, char **tokens,
 static int parse_bounds_section(MpsParserState *state, char **tokens,
                                 int n_tokens);
 static int parse_quadobj_section(MpsParserState *state, char **tokens, 
-                                int n_tokens);                                
+                                int n_tokens, bool fill_sym);                                
 static int coo_to_csr_component(CsrComponent *csr, CooMatrix *coo, size_t num_constraints);
 typedef enum
 {
@@ -415,7 +415,8 @@ typedef enum
     SEC_BOUNDS,
     SEC_OBJSENSE,
     SEC_ENDATA,
-    SEC_QUADOBJ
+    SEC_QUADOBJ,
+    SEC_QMATRIX
 } MpsSection;
 
 lp_problem_t *read_mps_file(const char *filename)
@@ -471,6 +472,8 @@ lp_problem_t *read_mps_file(const char *filename)
                 next_section = SEC_OBJSENSE;
             else if (strcmp(tokens[0], "QUADOBJ") == 0)
                 next_section = SEC_QUADOBJ;
+            else if (strcmp(tokens[0], "QMATRIX") == 0)
+                next_section = SEC_QMATRIX;
             else if (strcmp(tokens[0], "ENDATA") == 0)
             {
                 next_section = SEC_ENDATA;
@@ -520,7 +523,11 @@ lp_problem_t *read_mps_file(const char *filename)
                 state.error_flag = 1;
             break;
         case SEC_QUADOBJ:
-            if (parse_quadobj_section(&state, tokens, n_tokens) != 0)
+            if (parse_quadobj_section(&state, tokens, n_tokens, true) != 0)
+                state.error_flag = 1;
+            break;
+        case SEC_QMATRIX:
+            if (parse_quadobj_section(&state, tokens, n_tokens, false) != 0)
                 state.error_flag = 1;
             break;
         default:
@@ -777,7 +784,7 @@ static int parse_columns_section(MpsParserState *state, char **tokens,
     }
     return 0;
 }
-static int parse_quadobj_section(MpsParserState *state, char **tokens, int n_tokens)
+static int parse_quadobj_section(MpsParserState *state, char **tokens, int n_tokens, bool fill_sym)
 {
     if (n_tokens < 3)
         return 0;
@@ -793,6 +800,7 @@ static int parse_quadobj_section(MpsParserState *state, char **tokens, int n_tok
     int col_idx2 = namemap_get(&state->col_map, row_name2);
     if (col_idx1 == -1 || col_idx2 == -1)
     {
+        fprintf(stderr, "Warning: Variable '%s' or '%s' not found in COLUMNS. Skipping Q-entry.\n", row_name1, row_name2);
         return 0;
     }
 
@@ -809,9 +817,12 @@ static int parse_quadobj_section(MpsParserState *state, char **tokens, int n_tok
         {
             return -1;
         }
-        if (add_coo_entry(&state->coo_matrix_q, col_idx2, col_idx1, value) != 0)
+        if (fill_sym)
         {
-            return -1;
+            if (add_coo_entry(&state->coo_matrix_q, col_idx2, col_idx1, value) != 0)
+            {
+                return -1;
+            }
         }
     }
     return 0;
