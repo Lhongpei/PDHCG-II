@@ -431,6 +431,7 @@ void primal_gradient_update(pdhg_solver_state_t *state, double step_size)
 void pdhg_update(pdhg_solver_state_t *state)
 {
     double primal_step_size = state->step_size / state->primal_weight;
+    primal_step_size = fmax(primal_step_size, - 1.01 * fmin(0.0, state->quadratic_objective_term->nonconvexity));
     double dual_step_size = state->step_size * state->primal_weight;
 
     // Primal Update
@@ -614,33 +615,6 @@ initialize_step_size_and_primal_weight(pdhg_solver_state_t *state,
     state->best_primal_weight = state->primal_weight;
 }
 
-void initialize_quadratic_term_information(pdhg_solver_state_t *state,
-                                        const pdhg_parameters_t *params)
-{
-    if (state->quadratic_objective_term->quad_obj_type == PDHCG_SPARSE_Q)
-    {
-        state->quadratic_objective_term->norm = estimate_maximum_eigenvalue(
-            state->sparse_handle, state->blas_handle, state->quadratic_objective_term->objective_matrix,
-            params->sv_max_iter, params->sv_tol
-        );
-        return;
-    }
-    if (state->quadratic_objective_term->quad_obj_type == PDHCG_DIAG_Q)
-    {
-        double max_eigen = 0.0;
-        double min_eigen = 0.0;
-        for (int i = 0; i < state->num_variables; i ++)
-        {
-            double item = state->quadratic_objective_term->diagonal_objective_matrix[i];
-            max_eigen = fmax(max_eigen, 
-                            fabs(item));
-            min_eigen = fmin(min_eigen, item);
-        }
-        state->quadratic_objective_term->norm = max_eigen;
-        state->quadratic_objective_term->nonconvexity = min_eigen;
-    }
-}
-
 void compute_fixed_point_error(pdhg_solver_state_t *state)
 {
     compute_delta_solution_kernel<<<state->num_blocks_primal_dual,
@@ -684,7 +658,7 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
         (state->quadratic_objective_term->quad_obj_type != PDHCG_NON_Q && 
             state->quadratic_objective_term->quad_obj_type != PDHCG_DIAG_Q))
     {
-        state->inner_solver->tol = fmin(state->inner_solver->tol, fmax(0.0005 * primal_norm / state->step_size * state->primal_weight, 1e-12)) ;
+        state->inner_solver->tol = fmin(state->inner_solver->tol, fmax(0.0005 * primal_norm / state->step_size * state->primal_weight, 1e-15)) ;
         // printf("Update Inner Solver Tolerence to:  %.3e, primal movement is: %.3e\n",state->inner_solver->tol, primal_norm);
     }
 }

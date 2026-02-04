@@ -113,6 +113,12 @@ extern "C"
         const cu_sparse_matrix_csr_t *A,
         int max_iterations, double tolerance);
 
+    double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
+        cublasHandle_t blas_handle,
+        const cu_sparse_matrix_csr_t *A,
+        double lambda_max, 
+        int max_iterations, double tolerance);
+
     void compute_interaction_and_movement(
         pdhg_solver_state_t *solver_state,
         double *interaction,

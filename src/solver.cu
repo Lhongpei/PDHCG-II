@@ -58,6 +58,11 @@ cupdlpx_result_t *optimize(const pdhg_parameters_t *input_params,
     rescale_info_t *rescale_info = rescale_problem(params, working_problem);
     pdhg_solver_state_t *state = initialize_solver_state(params, working_problem, rescale_info);
 
+    if (state->quadratic_objective_term->nonconvexity < 0) 
+    {
+        state->inner_solver->iteration_limit = 1;
+    }
+
     rescale_info_free(rescale_info);
     initialize_step_size_and_primal_weight(state, params);
     clock_t start_time = clock();

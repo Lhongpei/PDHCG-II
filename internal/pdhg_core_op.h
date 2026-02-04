@@ -62,7 +62,7 @@ extern "C"
     pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
                                                  const lp_problem_t *original_problem,
                                                  const rescale_info_t *rescale_info);
-    
+                                                 
     void compute_fixed_point_error(pdhg_solver_state_t *state);
 
     void perform_primal_restart(pdhg_solver_state_t *state);

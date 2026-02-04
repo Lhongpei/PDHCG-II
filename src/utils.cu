@@ -250,6 +250,79 @@ double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
 
     return lambda;
 }
+double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
+                                   cublasHandle_t blas_handle,
+                                   const cu_sparse_matrix_csr_t *A,
+                                   double lambda_max, 
+                                   int max_iterations, double tolerance)
+{
+    int n = A->num_rows;
+    double *v_d, *Av_d, *shifted_v_d;
+
+    CUDA_CHECK(cudaMalloc(&v_d, n * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&Av_d, n * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&shifted_v_d, n * sizeof(double)));
+
+    double *v_h = (double *)malloc(n * sizeof(double));
+    for (int i = 0; i < n; ++i) v_h[i] = (double)rand() / RAND_MAX;
+    CUDA_CHECK(cudaMemcpy(v_d, v_h, n * sizeof(double), cudaMemcpyHostToDevice));
+    free(v_h);
+
+    cusparseSpMatDescr_t matA;
+    cusparseDnVecDescr_t vecV, vecAv;
+    CUSPARSE_CHECK(cusparseCreateCsr(&matA, n, n, A->num_nonzeros, 
+                                     A->row_ptr, A->col_ind, A->val,
+                                     CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I,
+                                     CUSPARSE_INDEX_BASE_ZERO, CUDA_R_64F));
+    CUSPARSE_CHECK(cusparseCreateDnVec(&vecV, n, v_d, CUDA_R_64F));
+    CUSPARSE_CHECK(cusparseCreateDnVec(&vecAv, n, Av_d, CUDA_R_64F));
+
+    double one = 1.0, zero = 0.0;
+    size_t bufferSize = 0;
+    CUSPARSE_CHECK(cusparseSpMV_bufferSize(sparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                                           &one, matA, vecV, &zero, vecAv, 
+                                           CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, &bufferSize));
+    void* dBuffer = NULL;
+    CUDA_CHECK(cudaMalloc(&dBuffer, bufferSize));
+
+    double mu = 0.0;
+
+    for (int i = 0; i < max_iterations; ++i)
+    {
+        double norm;
+        CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, n, v_d, 1, &norm));
+        double inv_norm = 1.0 / norm;
+        CUBLAS_CHECK(cublasDscal(blas_handle, n, &inv_norm, v_d, 1));
+
+        CUSPARSE_CHECK(cusparseSpMV(sparse_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                                    &one, matA, vecV, &zero, vecAv,
+                                    CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, dBuffer));
+
+        double neg_one = -1.0;
+        CUDA_CHECK(cudaMemcpy(shifted_v_d, Av_d, n * sizeof(double), cudaMemcpyDeviceToDevice));
+        CUBLAS_CHECK(cublasDscal(blas_handle, n, &neg_one, shifted_v_d, 1)); 
+        CUBLAS_CHECK(cublasDaxpy(blas_handle, n, &lambda_max, v_d, 1, shifted_v_d, 1));
+
+        double old_mu = mu;
+        CUBLAS_CHECK(cublasDdot(blas_handle, n, v_d, 1, shifted_v_d, 1, &mu));
+
+        if (i > 0 && fabs(mu - old_mu) < tolerance) break;
+
+        CUDA_CHECK(cudaMemcpy(v_d, shifted_v_d, n * sizeof(double), cudaMemcpyDeviceToDevice));
+    }
+
+    double lambda_min = lambda_max - mu;
+
+    CUDA_CHECK(cudaFree(dBuffer));
+    CUSPARSE_CHECK(cusparseDestroySpMat(matA));
+    CUSPARSE_CHECK(cusparseDestroyDnVec(vecV));
+    CUSPARSE_CHECK(cusparseDestroyDnVec(vecAv));
+    CUDA_CHECK(cudaFree(v_d));
+    CUDA_CHECK(cudaFree(Av_d));
+    CUDA_CHECK(cudaFree(shifted_v_d));
+
+    return lambda_min;
+}
 
 void compute_interaction_and_movement(pdhg_solver_state_t *state,
                                       double *interaction, double *movement)

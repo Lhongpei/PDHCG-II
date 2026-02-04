@@ -210,6 +210,37 @@ static void decide_problem_type(pdhg_solver_state_t *state)
         state->problem_type = CONVEX_QP;
 }
 
+void initialize_quadratic_term_information(pdhg_solver_state_t *state,
+                                        const pdhg_parameters_t *params)
+{
+    if (state->quadratic_objective_term->quad_obj_type == PDHCG_SPARSE_Q)
+    {
+        state->quadratic_objective_term->norm = estimate_maximum_eigenvalue(
+            state->sparse_handle, state->blas_handle, state->quadratic_objective_term->objective_matrix,
+            params->sv_max_iter, params->sv_tol
+        );
+        state->quadratic_objective_term->nonconvexity = estimate_minimum_eigenvalue(
+            state->sparse_handle, state->blas_handle, state->quadratic_objective_term->objective_matrix,
+            state->quadratic_objective_term->norm, params->sv_max_iter, params->sv_tol
+        );
+        return;
+    }
+    if (state->quadratic_objective_term->quad_obj_type == PDHCG_DIAG_Q)
+    {
+        double max_eigen = 0.0;
+        double min_eigen = 0.0;
+        for (int i = 0; i < state->num_variables; i ++)
+        {
+            double item = state->quadratic_objective_term->diagonal_objective_matrix[i];
+            max_eigen = fmax(max_eigen, 
+                            fabs(item));
+            min_eigen = fmin(min_eigen, item);
+        }
+        state->quadratic_objective_term->norm = max_eigen;
+        state->quadratic_objective_term->nonconvexity = min_eigen;
+    }
+}
+
 pdhg_solver_state_t *
 initialize_solver_state(const pdhg_parameters_t *params,
                         const lp_problem_t *working_problem,
@@ -509,6 +540,7 @@ initialize_solver_state(const pdhg_parameters_t *params,
         CUDA_R_64F, CUSPARSE_SPMV_CSR_ALG2, state->dual_spmv_buffer));
 
     initialize_quadratic_obj_term(state, rescale_info->scaled_problem);
+    initialize_quadratic_term_information(state, params);
     initialize_inner_solver(state);
 
     CUDA_CHECK(
@@ -539,6 +571,11 @@ initialize_solver_state(const pdhg_parameters_t *params,
             "------------------\n");
         printf("Problem Type: %s\n", problem_type_to_string(state->problem_type));
         printf("Quadratic Objective Matrix Type: %s\n", quad_obj_type_to_string(state->quadratic_objective_term->quad_obj_type));
+        if (state->quadratic_objective_term->quad_obj_type != PDHCG_NON_Q)
+        {
+            printf("L2 Norm of Quadratic Objective Matrix: %.3e\n", state->quadratic_objective_term->norm);
+            printf("Non-Convexity of Quadratic Objective Matrix: %.3e\n", state->quadratic_objective_term->nonconvexity);
+        }
         printf("---------------------------------------------------------------------"
             "------------------\n");
         printf("%s | %s | %s | %s \n", "   runtime    ", "    objective     ",
