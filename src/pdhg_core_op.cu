@@ -356,7 +356,7 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
     int inner_solver_iter = 1;
     double norm_gtg;
     double tmp;
-    double alpha = 1.0 / (state->quadratic_objective_term->norm + inv_step_size);
+    double alpha = 1.0 / inv_step_size;
     update_obj_product(state, state->current_primal_solution);
     primal_gradient_descent_kernel_bb_init<<<state->num_blocks_primal,
                                     THREADS_PER_BLOCK>>>(
@@ -431,7 +431,11 @@ void primal_gradient_update(pdhg_solver_state_t *state, double step_size)
 void pdhg_update(pdhg_solver_state_t *state)
 {
     double primal_step_size = state->step_size / state->primal_weight;
-    primal_step_size = fmax(primal_step_size, - 1.01 * fmin(0.0, state->quadratic_objective_term->nonconvexity));
+    if (state->quadratic_objective_term->nonconvexity < 0)
+    {
+        primal_step_size = fmax(primal_step_size, - 1.01 * fmin(0.0, state->quadratic_objective_term->nonconvexity));
+        primal_step_size /= 2;
+    }
     double dual_step_size = state->step_size * state->primal_weight;
 
     // Primal Update
@@ -658,7 +662,7 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
         (state->quadratic_objective_term->quad_obj_type != PDHCG_NON_Q && 
             state->quadratic_objective_term->quad_obj_type != PDHCG_DIAG_Q))
     {
-        state->inner_solver->tol = fmin(state->inner_solver->tol, fmax(0.0005 * primal_norm / state->step_size * state->primal_weight, 1e-15)) ;
+        state->inner_solver->tol = fmin(state->inner_solver->tol, fmax(0.0005 * primal_norm / state->step_size * state->primal_weight, 1e-9)) ;
         // printf("Update Inner Solver Tolerence to:  %.3e, primal movement is: %.3e\n",state->inner_solver->tol, primal_norm);
     }
 }

@@ -229,9 +229,14 @@ void initialize_quadratic_term_information(pdhg_solver_state_t *state,
     {
         double max_eigen = 0.0;
         double min_eigen = 0.0;
+        double *temp_diag_host = (double*)malloc(state->num_variables * sizeof(double));
+        cudaMemcpy(temp_diag_host, 
+               state->quadratic_objective_term->diagonal_objective_matrix, 
+               state->num_variables * sizeof(double), 
+               cudaMemcpyDeviceToHost);
         for (int i = 0; i < state->num_variables; i ++)
         {
-            double item = state->quadratic_objective_term->diagonal_objective_matrix[i];
+            double item = temp_diag_host[i];
             max_eigen = fmax(max_eigen, 
                             fabs(item));
             min_eigen = fmin(min_eigen, item);

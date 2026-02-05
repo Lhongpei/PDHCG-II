@@ -796,6 +796,19 @@ __global__ void compute_qp_residual_kernel(
     }
 }
 
+__global__ void recover_primal_obj_dual_product(
+    double *dual_product, double *primal_obj_product, const double *variable_rescaling, int num_variables
+)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i < num_variables)
+    {
+        dual_product[i] = dual_product[i] * variable_rescaling[i];
+        primal_obj_product[i] = primal_obj_product[i] * variable_rescaling[i];
+    }
+}
+
 __global__ void primal_infeasibility_project_kernel(
     double *primal_ray_estimate, const double *variable_lower_bound,
     const double *variable_upper_bound, int num_variables)
@@ -1012,12 +1025,42 @@ void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm)
                                       (state->constraint_bound_rescaling *
                                        state->objective_vector_rescaling) +
                                   state->objective_constant;
-
+    double relative_primal_dominator = 1.0 + state->constraint_bound_norm;
     state->relative_primal_residual = 
-        state->absolute_primal_residual / (1.0 + state->constraint_bound_norm);
+        state->absolute_primal_residual / relative_primal_dominator;
     
+    double relative_dual_dominator;
+    if (state->problem_type == LP)
+    {
+        relative_dual_dominator = 1.0 + state->objective_vector_norm;
+    }
+    else
+    {
+        recover_primal_obj_dual_product<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
+            state->dual_product, state->quadratic_objective_term->primal_obj_product, state->variable_rescaling,
+            state->num_variables);
+        double qx_norm;
+        if (optimality_norm == NORM_TYPE_L_INF) {
+            qx_norm = get_vector_inf_norm(state->blas_handle, 
+                                        state->num_variables, state->quadratic_objective_term->primal_obj_product);
+            }
+        else{
+            CUBLAS_CHECK(cublasDnrm2_v2_64(state->blas_handle, state->num_variables, 
+                state->quadratic_objective_term->primal_obj_product, 1, &qx_norm));
+        }
+        double Ay_norm;
+        if (optimality_norm == NORM_TYPE_L_INF) {
+            Ay_norm = get_vector_inf_norm(state->blas_handle, 
+                                            state->num_variables, state->dual_product);
+        } else {
+            CUBLAS_CHECK(cublasDnrm2_v2_64(state->blas_handle, state->num_variables, 
+                                        state->dual_product, 1, 
+                                        &Ay_norm));
+        }
+        relative_dual_dominator = 1.0 + fmax(state->objective_vector_norm, fmax(qx_norm / state->objective_vector_rescaling, Ay_norm / state->objective_vector_rescaling));
+    }
     state->relative_dual_residual =
-        state->absolute_dual_residual / (1.0 + state->objective_vector_norm);
+        state->absolute_dual_residual / relative_dual_dominator;
 
     state->objective_gap =
         fabs(state->primal_objective_value - state->dual_objective_value);
