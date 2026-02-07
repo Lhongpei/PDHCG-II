@@ -1,83 +1,61 @@
-# D-PDLP: A First-Order LP Solver Accelerated on Multiple GPUs
+# PDHCG: A GPU-Accelerated Solver for Quadratic Programming
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![arXiv](https://img.shields.io/badge/arXiv-2601.07628-B31B1B.svg)](https://arxiv.org/pdf/2601.07628)
+[![Publication](https://img.shields.io/badge/DOI-10.1287/ijoc.2024.0983-B31B1B.svg)](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983)
+[![arXiv](https://img.shields.io/badge/arXiv-2405.16160-b31b1b.svg)](https://arxiv.org/abs/2405.16160)
 
-**D-PDLP** (Distributed PDLP) is a high-performance, distributed implementation of the Primal-Dual Hybrid Gradient (PDHG) algorithm designed for solving massive-scale Linear Programming (LP) problems on multi-GPU systems.
+**PDHCG** is a high-performance, GPU-accelerated implementation of the Primal-Dual Hybrid Gradient (PDHG) algorithm designed for solving large-scale Quadratic Programming (QP) problems. This solver is developed by Hongpei Li, Yicheng Huang, Huikang Liu, Dongdong Ge, and Yinyu Ye.
 
-By leveraging 2D Grid Partitioning, D-PDLP scales the first-order PDHG method across GPU clusters, efficiently harnessing the aggregate computational power and memory of multiple devices. This implementation is built upon [cuPDLPx](https://github.com/Lhongpei/cuPDLPx), a GPU-accelerated LP solver described in [cuPDLPx: A Further Enhanced GPU-Based First-Order Solver for Linear Programming](https://arxiv.org/abs/2507.14051).
-
-For a detailed explanation of the methodology, please refer to our paper: [Beyond Single-GPU: Scaling PDLP to Distributed Multi-GPU Systems](https://arxiv.org/pdf/2601.07628).
+For a detailed explanation of the methodology, please refer to our paper: [A GPU-Based Primal-Dual Hybrid Gradient Method for Quadratic Programming](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983).
 
 ---
 
 ## Problem Formulation
 
-Consistent with cuPDLPx, D-PDLP solves linear programs in the standard form:
+PDHCG solves quadratic programs in the standard form:
 
 ```math
 \begin{aligned}
-\min_{x} \quad & c^\top x \\
+\min_{x} \quad & \frac{1}{2}x^\top Q x + c^\top x \\
 \text{s.t.} \quad & \ell_c \le Ax \le u_c, \\
                   & \ell_v \le x \le u_v.
 \end{aligned}
 ```
 
-## Installation
 
-To use the solver, you must compile the project using CMake.
+## Installation (C++ Executable)
+
+To use the standalone C++ solver, you must compile the project using CMake.
 
 ### Requirements
 * **GPU:** NVIDIA GPU with CUDA 12.4+.
 * **Build Tools:** CMake (≥ 3.20), GCC, NVCC.
-* **Distributed Tolls:** MPI, NCCL.
+
 ### Build from Source
 Clone the repository and compile the project using CMake.
 ```bash
-git clone git@github.com:Lhongpei/D-PDLP.git
-cd D-PDLP
+git clone https://github.com/Lhongpei/PDHCGv2-C.git
+cd PDHCGv2-C
 cmake -B build
 cmake --build build --clean-first
 ```
-This will create the solver binary at `./build/pdhcg-dist`.
+This will create the solver binary at `./build/bin/pdhcg`.
 
 
-##  Usage
+##  Usage (C++ Executable)
 
-The executable supports both single-GPU and multi-GPU distributed modes. It automatically detects the mode based on the MPI launcher.
-
-### 1. Single GPU Mode
-
-Run the solver directly without MPI to use a single GPU.
+Run the solver from the command line:
 
 ```bash
-./build/pdhcg-dist <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
-
-```
-
-### 2. Distributed Multi-GPU Mode
-
-Use `mpirun` to launch the solver across multiple GPUs.
-
-```bash
-mpirun -n <NUM_GPU> ./build/pdhcg-dist <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
-
+./build/bin/pdhcg <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
 ```
 
 ### Command Line Arguments
 
 **Positional Arguments:**
 
-1. `<MPS_FILE>`: Path to the input QP (supports `.mps`, `.QPS` and `.mps.gz`).
+1. `<MPS_FILE>`: Path to the input QP (supports `.mps`, `.qps`, and `.mps.gz`).
 2. `<OUTPUT_DIR>`: Directory where solution files will be saved.
-
-**Distributed Options:**
-
-| Option | Type | Description | Default |
-| :--- | :--- | :--- | :--- |
-| `--grid_size <r>,<c>` | `string` | 2D Grid topology (Rows x Cols) | Auto-detect |
-| `--partition_method` | `string` | Partitioning strategy: `uniform` or `nnz`. | `nnz` |
-| `--permute_method` | `string` | Matrix permutation: `none`, `random`, or `block`. | `none` |
 
 **Solver Parameters:**
 | Option | Type | Description | Default |
@@ -88,45 +66,67 @@ mpirun -n <NUM_GPU> ./build/pdhcg-dist <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
 | `--iter_limit` | `int` | Iteration limit. | `2147483647` |
 | `--eps_opt` | `double` | Relative optimality tolerance. | `1e-4` |
 | `--eps_feas` | `double` | Relative feasibility tolerance. | `1e-4` |
-| `--eps_infeas_detect` | `double` | Infeasibility detection tolerance. | `1e-10` |
-| `--l_inf_ruiz_iter` | `int` | Iterations for L-inf Ruiz rescaling| `10` |
-| `--no_pock_chambolle` | `flag` | Disable Pock-Chambolle rescaling | `enabled` |
-| `--pock_chambolle_alpha` | `float` | Value for Pock-Chambolle alpha | `1.0` |
-| `--no_bound_obj_rescaling` | `flag` | Disable bound objective rescaling | `enabled` |
-| `--eval_freq` | `int` | Termination evaluation frequency | `200` |
-| `--sv_max_iter` | `int` | Max iterations for singular value estimation | `5000` |
-| `--sv_tol` | `float` | Tolerance for singular value estimation | `1e-4` |
 
 ---
 
-## Output Artifacts
+<!-- ## Citation
 
-Upon successful completion, the solver generates three files in the specified output directory:
-
-1. **`<PROBLEM>_summary.txt`**: Scalar metrics (Time, Iterations, Primal/Dual values, Residuals).
-2. **`<PROBLEM>_primal_solution.txt`**: The full primal solution vector (one float per line).
-3. **`<PROBLEM>_dual_solution.txt`**: The full dual solution vector (one float per line).
-
----
-
-## Citation
-
-If you use this software or method in your research, please cite our paper:
+If you use PDHCG in your research, please cite our paper:
 
 ```bibtex
-@article{li2026beyond,
-  title={Beyond Single-GPU: Scaling PDLP to Distributed Multi-GPU Systems},
-  author={Li, Hongpei and Huang, Yicheng and Liu, Huikang and Ge, Dongdong and Ye, Yinyu},
-  journal={arXiv preprint arXiv:2601.07628},
-  year={2026}
+@article{Li2024,
+  author  = {Li, Hongpei and Huang, Yicheng and Liu, Huikang and Ge, Dongdong and Ye, Yinyu},
+  title   = {A GPU-Based Primal-Dual Hybrid Gradient Method for Quadratic Programming},
+  journal = {INFORMS Journal on Computing},
+  year    = {2024},
+  doi     = {10.1287/ijoc.2024.0983},
+  URL     = {https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983}
 }
-
 ```
 
----
+--- -->
 
+## Python Interface
+
+PDHCG provides a user-friendly Python interface that allows you to define, solve, and analyze QP problems using familiar libraries like NumPy and SciPy.
+
+For detailed instructions on how to use the Python interface, including installation, modeling, and examples, please see the [Python Interface README](./python/README.md).
+
+### Quick Example in Python
+
+```python
+import numpy as np
+import scipy.sparse as sp
+from pdhcg import Model, PDHCG
+
+# Example: minimize 0.5 * x'Qx + c'x
+# subject to l <= A x <= u,  lb <= x <= ub
+Q = sp.csc_matrix([[1.0, -1.0], [-1.0, 2.0]])
+c = np.array([-2.0, -6.0])
+A = sp.csc_matrix([[1.0, 1.0], [-1.0, 2.0], [2.0, 1.0]])
+l = np.array([-np.inf, -np.inf, -np.inf])
+u = np.array([2.0, 2.0, 3.0])
+lb = np.zeros(2)
+ub = np.array([np.inf, np.inf])
+
+# Create QP model
+m = Model(objective_matrix=Q,
+          objective_vector=c,
+          constraint_matrix=A,
+          constraint_lower_bound=l,
+          constraint_upper_bound=u,
+          variable_lower_bound=lb,
+          variable_upper_bound=ub)
+
+# Solve
+m.optimize()
+
+# Print results
+print("Status:", m.Status)
+print("Objective:", m.ObjVal)
+```
 ## License
 
-Copyright 2025-2026 Hongpei Li, Haihao Lu.
+Copyright 2024-2026 Hongpei Li.
 
 Licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for details.

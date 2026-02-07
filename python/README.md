@@ -1,18 +1,15 @@
-# **Python Interface for cuPDLPx**
+# **Python Interface for PDHCG**
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/github/release/MIT-Lu-Lab/cuPDLPx.svg)](https://github.com/MIT-Lu-Lab/cuPDLPx/releases)
-[![PyPI version](https://badge.fury.io/py/pdhcg.svg)](https://pypi.org/project/pdhcg/)
-[![arXiv](https://img.shields.io/badge/arXiv-2407.16144-B31B1B.svg)](https://arxiv.org/abs/2407.16144)
-[![arXiv](https://img.shields.io/badge/arXiv-2507.14051-B31B1B.svg)](https://arxiv.org/abs/2507.14051)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![PyPI version](https://badge.fury.io/py/pdhcg.svg)](https://pypi.org/project/pdhcg/) [![Publication](https://img.shields.io/badge/DOI-10.1287/ijoc.2024.0983-B31B1B.svg)](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983)
+[![arXiv](https://img.shields.io/badge/arXiv-2405.16160-b31b1b.svg)](https://arxiv.org/abs/2405.16160)
 
-There is the Python interface to **[`PDHCG`](../README.md)**, a GPU-accelerated first-order solver for large-scale linear programming (LP).  
-It provides a high-level, Pythonic API for constructing, modifying, and solving LPs using NumPy and SciPy data structures.
+This is the Python interface to **[`PDHCG`](../README.md)**, a GPU-accelerated first-order solver for large-scale Quadratic Programming (QP).  
+It provides a high-level, Pythonic API for constructing, modifying, and solving QPs using NumPy and SciPy data structures.
 
 ## Installation
 
 ### Requirements
-- Python ≥ 3.9  
+- Python ≥ 3.8  
 - NumPy ≥ 1.21  
 - SciPy ≥ 1.8  
 - An NVIDIA GPU with CUDA support (≥12.4 required)  
@@ -37,21 +34,23 @@ pip install .
 
 ```python
 import numpy as np
-from pdhcg import Model, PDLP
+import scipy.sparse as sp
+from pdhcg import Model, PDHCG
 
-# Example: minimize c^T x
+# Example: minimize 0.5 * x'Qx + c'x
 # subject to l <= A x <= u,  lb <= x <= ub
-c  = np.array([1.0, 1.0])
-A  = np.array([[1.0, 2.0],
-               [0.0, 1.0],
-               [3.0, 2.0]])
-l  = np.array([5.0, -np.inf, -np.inf])
-u  = np.array([5.0, 2.0, 8.0])
-lb = np.zeros(2)   # x >= 0
-ub = None          # no upper bound
+Q = sp.csc_matrix([[1.0, -1.0], [-1.0, 2.0]])
+c = np.array([-2.0, -6.0])
+A = sp.csc_matrix([[1.0, 1.0], [-1.0, 2.0], [2.0, 1.0]])
+l = np.array([-np.inf, -np.inf, -np.inf])
+u = np.array([2.0, 2.0, 3.0])
+lb = np.zeros(2)
+ub = np.array([np.inf, np.inf])
 
-# Create LP model
-m = Model(objective_vector=c,
+
+# Create QP model
+m = Model(objective_matrix=Q,
+          objective_vector=c,
           constraint_matrix=A,
           constraint_lower_bound=l,
           constraint_upper_bound=u,
@@ -59,7 +58,7 @@ m = Model(objective_vector=c,
           variable_upper_bound=ub)
 
 # Set model sense
-m.ModelSense = PDLP.MAXIMIZE
+m.ModelSense = PDHCG.MINIMIZE
 
 # Parameters can be set in multiple ways
 m.Params.TimeLimit = 60        # attribute style
@@ -78,38 +77,40 @@ print("Dual solution:", m.Pi)
 
 ## Modeling
 
-The `Model` class represents a linear programming problem of the form:
+The `Model` class represents a quadratic programming problem of the form:
 
 $$
-\min c^\top x + c_0 \quad
+\min \frac{1}{2} x^\top Q x + c^\top x + c_0 \quad
 \text{s.t.} \; \ell \le A x \le u, \quad
 \text{lb} \le x \le \text{ub}.
 $$
 
 ### Arguments
 
-- **objective_vector** (`c`): Coefficients of the objective function.  
-- **constraint_matrix** (`A`): Coefficient matrix for the constraints. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported. Internally stored in double precision (`float64`).
+- **objective_matrix** (`Q`): Quadratic part of the objective function. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
+- **objective_vector** (`c`): Linear part of the objective function.  
+- **constraint_matrix** (`A`): Coefficient matrix for the constraints. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
 - **constraint_lower_bound** (`l`): Lower bounds for each constraint. Use `-np.inf` or `None` for no lower bound.
 - **constraint_upper_bound** (`u`): Upper bounds for each constraint. Use `+np.inf` or `None` for no upper bound.
 - **variable_lower_bound** (`lb`, optional): Lower bounds for the decision variables. Defaults to `0` for all variables if not provided.
 - **variable_upper_bound** (`ub`, optional): Upper bounds for the decision variables. Defaults to `+np.inf` for all variables if not provided.
 - **objective_constant** (`c0`, optional): Constant offset in the objective function. Defaults to `0.0`.
 
-To initialize a linear programming problem, you need to provide the objective vector, constraint matrix, and bounds on both constraints and variables.  
+To initialize a quadratic programming problem, you need to provide the objective matrix and vector, constraint matrix, and bounds on both constraints and variables.  
 
 ```python
-c  = np.array([1.0, 1.0])
-A  = np.array([[1.0, 2.0],
-               [0.0, 1.0],
-               [3.0, 2.0]])
-l  = np.array([5.0, -np.inf, -np.inf])
-u  = np.array([5.0, 2.0, 8.0])
-lb = np.zeros(2)   # x >= 0
-ub = None          # no upper bound
+Q = sp.csc_matrix([[1.0, -1.0], [-1.0, 2.0]])
+c = np.array([-2.0, -6.0])
+A = sp.csc_matrix([[1.0, 1.0], [-1.0, 2.0], [2.0, 1.0]])
+l = np.array([-np.inf, -np.inf, -np.inf])
+u = np.array([2.0, 2.0, 3.0])
+lb = np.zeros(2)
+ub = np.array([np.inf, np.inf])
 
-# Create LP model
-m = Model(objective_vector=c,
+
+# Create QP model
+m = Model(objective_matrix=Q,
+          objective_vector=c,
           constraint_matrix=A,
           constraint_lower_bound=l,
           constraint_upper_bound=u,
@@ -126,7 +127,7 @@ To switch between minimization and maximization, set the attribute `ModelSense`:
 
 ```python
 # Set model sense
-m.ModelSense = PDLP.MAXIMIZE
+m.ModelSense = PDHCG.MAXIMIZE
 ```
 
 ## Parameters
@@ -156,7 +157,7 @@ Below is a list of commonly used parameters, their internal keys, and descriptio
 | `SVMaxIter` | `sv_max_iter` | int | 5000 | Maximum number of iterations for the power method |
 | `SVTol`| `sv_tol` | float | `1e-4` | Termination tolerance for the power method |
 | `Presolve`| `presolve` | float | `True` | Whether to use presolve. |
-| `FeasibilityPolishing` | `feasibility_polishing` | bool | `False` | Run feasibility polishing process.|
+| `FeasibilityPolishing` | `feasibility_polishing` | bool | `False` | Run feasibility polishing process.| 
 | `FeasibilityPolishingTol` | `eps_feas_polish_relative` | float | `1e-6` | Relative tolerance for primal/dual residual.  |
 
 They can be set in multiple ways:
