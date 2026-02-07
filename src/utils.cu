@@ -529,7 +529,7 @@ void set_default_parameters(pdhg_parameters_t *params)
 
     params->restart_params.artificial_restart_threshold = 0.36;
     params->restart_params.sufficient_reduction_for_restart = 0.2;
-    params->restart_params.necessary_reduction_for_restart = 0.5;
+    params->restart_params.necessary_reduction_for_restart = 0.8;
     params->restart_params.k_p = 0.99;
     params->restart_params.k_i = 0.01;
     params->restart_params.k_d = 0.0;

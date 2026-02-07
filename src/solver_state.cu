@@ -56,7 +56,7 @@ static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const lp_p
                     {
                         int col = csr->col_ind[k];
                         if (col < n) {
-                            h_diag[col] = csr->val[k];
+                            h_diag[col] = csr->val[k] + 1e-12;
                         }
                     }
                 }
