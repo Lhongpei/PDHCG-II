@@ -3,7 +3,7 @@
 
 #include "PSLP_API.h"
 #include "PSLP_stats.h"
-#include "cupdlpx.h"
+#include "pdhcg.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -18,19 +18,19 @@ extern "C"
         bool problem_solved_during_presolve;
         double presolve_time;
         char presolve_status;
-    } cupdlpx_presolve_info_t;
+    } pdhcg_presolve_info_t;
 
-    cupdlpx_presolve_info_t *pslp_presolve(const lp_problem_t *original_prob, const pdhg_parameters_t *params);
+    pdhcg_presolve_info_t *pslp_presolve(const lp_problem_t *original_prob, const pdhg_parameters_t *params);
 
-    cupdlpx_result_t *create_result_from_presolve(const cupdlpx_presolve_info_t *info, const lp_problem_t *original_prob);
+    pdhcg_result_t *create_result_from_presolve(const pdhcg_presolve_info_t *info, const lp_problem_t *original_prob);
 
     const char *get_presolve_status_str(enum PresolveStatus_ status);
 
-    void pslp_postsolve(cupdlpx_presolve_info_t *info,
-                        cupdlpx_result_t *reduced_result,
+    void pslp_postsolve(pdhcg_presolve_info_t *info,
+                        pdhcg_result_t *reduced_result,
                         const lp_problem_t *original_prob);
 
-    void cupdlpx_presolve_info_free(cupdlpx_presolve_info_t *info);
+    void pdhcg_presolve_info_free(pdhcg_presolve_info_t *info);
 
 #ifdef __cplusplus
 }

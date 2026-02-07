@@ -1,4 +1,4 @@
-#include "cupdlpx.h"
+#include "pdhcg.h"
 #include "pdhg_core_op.h"
 #include "solver_state.h"
 #include "internal_types.h"
@@ -404,7 +404,6 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
 void primal_gradient_update(pdhg_solver_state_t *state, double step_size)
 {
     double inv_step_size = 1.0 / step_size;
-    int inner_solver_iter = 1;
     double alpha = 1.0 / (state->quadratic_objective_term->norm + inv_step_size);
     update_obj_product(state, state->current_primal_solution);
     if (state->is_this_major_iteration ||
@@ -669,10 +668,10 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
 
 
 
-cupdlpx_result_t *create_result_from_state(pdhg_solver_state_t *state, const lp_problem_t *original_problem)
+pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const lp_problem_t *original_problem)
 {
-    cupdlpx_result_t *results =
-        (cupdlpx_result_t *)safe_calloc(1, sizeof(cupdlpx_result_t));
+    pdhcg_result_t *results =
+        (pdhcg_result_t *)safe_calloc(1, sizeof(pdhcg_result_t));
 
     // Compute reduced cost
     CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol,

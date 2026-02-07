@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 #include "mps_parser.h"
-#include "cupdlpx.h"
+#include "pdhcg.h"
 #include "utils.h"
 #include <ctype.h>
 #include <math.h>

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "cupdlpx_types.h"
-#include "cupdlpx.h"
+#include "pdhcg_types.h"
+#include "pdhcg.h"
 #include "internal_types.h"
 #include "preconditioner.h"
 #include "presolve.h"

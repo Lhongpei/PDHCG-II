@@ -1,7 +1,7 @@
 #pragma once
 
-#include "cupdlpx_types.h"
-#include "cupdlpx.h"
+#include "pdhcg_types.h"
+#include "pdhcg.h"
 #include "internal_types.h"
 #include "preconditioner.h"
 #include "presolve.h"
@@ -53,7 +53,7 @@ extern "C"
 
     void rescale_solution(pdhg_solver_state_t *state);
     
-    cupdlpx_result_t *create_result_from_state(pdhg_solver_state_t *state, const lp_problem_t *original_problem);
+    pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const lp_problem_t *original_problem);
     
     void perform_restart(pdhg_solver_state_t *state, const pdhg_parameters_t *params);
     

@@ -39,7 +39,7 @@ cd D-PDLP
 cmake -B build
 cmake --build build --clean-first
 ```
-This will create the solver binary at `./build/cupdlpx-dist`.
+This will create the solver binary at `./build/pdhcg-dist`.
 
 
 ##  Usage
@@ -51,7 +51,7 @@ The executable supports both single-GPU and multi-GPU distributed modes. It auto
 Run the solver directly without MPI to use a single GPU.
 
 ```bash
-./build/cupdlpx-dist <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
+./build/pdhcg-dist <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
 
 ```
 
@@ -60,7 +60,7 @@ Run the solver directly without MPI to use a single GPU.
 Use `mpirun` to launch the solver across multiple GPUs.
 
 ```bash
-mpirun -n <NUM_GPU> ./build/cupdlpx-dist <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
+mpirun -n <NUM_GPU> ./build/pdhcg-dist <MPS_FILE> <OUTPUT_DIR> [OPTIONS]
 
 ```
 

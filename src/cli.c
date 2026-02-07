@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#include "cupdlpx.h"
+#include "pdhcg.h"
 #include "mps_parser.h"
 #include "presolve.h"
 #include "solver.h"
@@ -84,7 +84,7 @@ void save_solution(const double *data, int size, const char *output_dir,
     free(file_path);
 }
 
-void save_solver_summary(const cupdlpx_result_t *result, const char *output_dir,
+void save_solver_summary(const pdhcg_result_t *result, const char *output_dir,
                          const char *instance_name)
 {
     char *file_path = get_output_path(output_dir, instance_name, "_summary.txt");
@@ -211,7 +211,7 @@ void print_usage(const char *prog_name)
                     "Disable presolve (default: enabled).\n");
 }
 
-int run_pdlpx(int argc, char *argv[])
+int run_pdhcg(int argc, char *argv[])
 {
     pdhg_parameters_t params;
     set_default_parameters(&params);
@@ -337,7 +337,7 @@ int run_pdlpx(int argc, char *argv[])
         free(instance_name);
         return 1;
     }
-    cupdlpx_result_t *result = optimize(&params, problem);
+    pdhcg_result_t *result = optimize(&params, problem);
 
     if (result == NULL)
     {
@@ -350,7 +350,7 @@ int run_pdlpx(int argc, char *argv[])
                       instance_name, "_primal_solution.txt");
         save_solution(result->dual_solution, problem->num_constraints, output_dir,
                       instance_name, "_dual_solution.txt");
-        cupdlpx_result_free(result);
+        pdhcg_result_free(result);
     }
 
     lp_problem_free(problem);
@@ -362,5 +362,5 @@ int run_pdlpx(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-    run_pdlpx(argc, argv);
+    run_pdhcg(argc, argv);
 }

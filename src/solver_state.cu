@@ -1,4 +1,4 @@
-#include "cupdlpx.h"
+#include "pdhcg.h"
 #include "solver_state.h"
 #include "internal_types.h"
 #include "preconditioner.h"

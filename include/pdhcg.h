@@ -16,7 +16,7 @@ limitations under the License.
 
 #pragma once
 
-#include "cupdlpx_types.h"
+#include "pdhcg_types.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -26,6 +26,7 @@ extern "C"
     // create an lp_problem_t from a matrix descriptor
     lp_problem_t *create_lp_problem(
         const double *objective_c,
+        const matrix_desc_t *Q_desc,
         const matrix_desc_t *A_desc,
         const double *con_lb,
         const double *con_ub,
@@ -37,14 +38,14 @@ extern "C"
     void set_start_values(lp_problem_t *prob, const double *primal, const double *dual);
 
     // solve the LP problem using PDHG
-    cupdlpx_result_t *solve_lp_problem(
+    pdhcg_result_t *solve_lp_problem(
         const lp_problem_t *prob,
         const pdhg_parameters_t *params);
 
     // parameter
     void set_default_parameters(pdhg_parameters_t *params);
 
-    void cupdlpx_result_free(cupdlpx_result_t *results);
+    void pdhcg_result_free(pdhcg_result_t *results);
 
     void lp_problem_free(lp_problem_t *prob);
 

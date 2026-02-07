@@ -102,26 +102,6 @@ extern "C"
 		int iteration_limit;
 	} termination_criteria_t;
 
-	typedef enum
-	{
-		UNIFORM_PARTITION,
-		NNZ_BALANCE_PARTITION,
-	} partition_method_t;
-
-	typedef enum
-	{
-		NO_PERMUTATION,
-		FULL_RANDOM_PERMUTATION,
-		BLOCK_RANDOM_PERMUTATION,
-	} permute_method_t;
-
-	typedef struct
-	{
-		int row_dims;
-		int col_dims;
-		bool decided;
-	} grid_size_t;
-
 	typedef struct
 	{
 		int l_inf_ruiz_iterations;
@@ -138,9 +118,6 @@ extern "C"
 		bool feasibility_polishing;
 		norm_type_t optimality_norm;
 		bool presolve;
-		partition_method_t partition_method;
-		permute_method_t permute_method;
-		grid_size_t grid_size;
 	} pdhg_parameters_t;
 
 	typedef struct
@@ -180,7 +157,7 @@ extern "C"
 		termination_reason_t termination_reason;
 		double feasibility_polishing_time;
 		int feasibility_iteration;
-	} cupdlpx_result_t;
+	} pdhcg_result_t;
 
 	// matrix formats
 	typedef enum

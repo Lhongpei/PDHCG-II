@@ -16,6 +16,6 @@ limitations under the License.
 
 #pragma once
 
-#include "cupdlpx_types.h"
+#include "pdhcg_types.h"
 
 lp_problem_t *read_mps_file(const char *filename);

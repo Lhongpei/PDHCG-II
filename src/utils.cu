@@ -19,14 +19,11 @@ limitations under the License.
 #include <math.h>
 #include <random>
 
-#ifndef CUPDLPX_VERSION
-#define CUPDLPX_VERSION "unknown"
+#ifndef PDHCG_VERSION
+#define PDHCG_VERSION "unknown"
 #endif
 
 
-#ifndef CUPDLPX_DIST_VERSION
-#define CUPDLPX_DIST_VERSION "unknown"
-#endif
 
 std::mt19937 gen(1);
 std::normal_distribution<double> dist(0.0, 1.0);
@@ -537,10 +534,6 @@ void set_default_parameters(pdhg_parameters_t *params)
 
     params->optimality_norm = NORM_TYPE_L2;
     params->presolve = true;
-
-    params->grid_size.decided = false;
-    params->partition_method = NNZ_BALANCE_PARTITION;
-    params->permute_method = BLOCK_RANDOM_PERMUTATION;
 }
 
 #define PRINT_DIFF_INT(name, current, default_val) \
@@ -645,7 +638,7 @@ void print_initial_info(const pdhg_parameters_t *params,
 #undef PRINT_DIFF_BOOL
 
 void pdhg_final_log(
-    const cupdlpx_result_t *result,
+    const pdhcg_result_t *result,
     const pdhg_parameters_t *params)
 {
     if (params->verbose)

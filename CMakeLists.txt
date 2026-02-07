@@ -4,23 +4,16 @@
 cmake_minimum_required(VERSION 3.20)
 set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.6/bin/nvcc" CACHE FILEPATH "CUDA Compiler" FORCE)
 # Project config
-option(ENABLE_MPI "Enable distributed computing with MPI" ON)
 
 
 project(pdhcg LANGUAGES C CXX CUDA)
 
 set(PDHCG_VERSION_MAJOR 0)
-set(PDHCG_VERSION_MINOR 2)
-set(PDHCG_VERSION_PATCH 2)
-set(PDHCG_DIST_VERSION_MAJOR 0)
-set(PDHCG_DIST_VERSION_MINOR 0)
-set(PDHCG_DIST_VERSION_PATCH 1)
+set(PDHCG_VERSION_MINOR 0)
+set(PDHCG_VERSION_PATCH 1)
 
 set(PDHCG_VERSION "${PDHCG_VERSION_MAJOR}.${PDHCG_VERSION_MINOR}.${PDHCG_VERSION_PATCH}")
 add_compile_definitions(PDHCG_VERSION="${PDHCG_VERSION}")
-
-set(PDHCG_DIST_VERSION "${PDHCG_DIST_VERSION_MAJOR}.${PDHCG_DIST_VERSION_MINOR}.${PDHCG_DIST_VERSION_PATCH}")
-add_compile_definitions(PDHCG_DIST_VERSION="${PDHCG_DIST_VERSION}")
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 
@@ -126,44 +119,18 @@ set(CORE_LINK_LIBS PUBLIC
   PSLP
 )
 
-if(ENABLE_MPI)
-    find_package(MPI REQUIRED)
-    add_definitions(-DUSE_MPI) 
-    message(STATUS "MPI is ENABLED")
-else()
-    message(STATUS "MPI is DISABLED (Single Node Mode)")
-endif()
-
-if(ENABLE_MPI AND MPI_FOUND)
-    list(APPEND CORE_LINK_LIBS MPI::MPI_CXX)
-    include_directories(${MPI_CXX_INCLUDE_PATH})
-    find_library(NCCL_LIB NAMES nccl 
-                 PATHS ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
-                       $ENV{NCCL_ROOT}/lib
-                       /usr/local/cuda/lib64
-                       /usr/lib/x86_64-linux-gnu)
-
-    if(NCCL_LIB)
-        message(STATUS "Found NCCL: ${NCCL_LIB}")
-        list(APPEND CORE_LINK_LIBS ${NCCL_LIB})
-    else()
-        message(WARNING "NCCL library not found explicitly, falling back to -lnccl")
-        list(APPEND CORE_LINK_LIBS nccl)
-    endif()
-endif()
-
 # -----------------------------------------------------------------------------
-# 1. Core STATIC Library (PDHCG_core)
+# 1. Core STATIC Library (pdhcg_core)
 # -----------------------------------------------------------------------------
 if(PDHCG_BUILD_STATIC_LIB)
-    add_library(PDHCG_core STATIC
+    add_library(pdhcg_core STATIC
       ${C_SOURCES}
       ${CU_SOURCES}
     )
-    target_include_directories(PDHCG_core ${CORE_INCLUDE_DIRS})
-    target_link_libraries(PDHCG_core ${CORE_LINK_LIBS})
+    target_include_directories(pdhcg_core ${CORE_INCLUDE_DIRS})
+    target_link_libraries(pdhcg_core ${CORE_LINK_LIBS})
 
-    set_target_properties(PDHCG_core PROPERTIES
+    set_target_properties(pdhcg_core PROPERTIES
       POSITION_INDEPENDENT_CODE ON
       CUDA_SEPARABLE_COMPILATION ON
       CUDA_RESOLVE_DEVICE_SYMBOLS ON
@@ -194,7 +161,7 @@ endif()
 # 3. CLI Executable (pdhcg)
 # -----------------------------------------------------------------------------
 if(PDHCG_BUILD_CLI)
-    if(NOT TARGET PDHCG_core)
+    if(NOT TARGET pdhcg_core)
         message(FATAL_ERROR "PDHCG_BUILD_CLI=ON requires PDHCG_BUILD_STATIC_LIB=ON.")
     endif()
     
@@ -206,7 +173,7 @@ if(PDHCG_BUILD_CLI)
     )
 
     # Link CLI to the static core library
-    target_link_libraries(PDHCG_cli PRIVATE PDHCG_core)
+    target_link_libraries(PDHCG_cli PRIVATE pdhcg_core)
 
     # CLI is a final executable, it must resolve device symbols
     set_target_properties(PDHCG_cli PROPERTIES
@@ -220,7 +187,7 @@ endif()
 # 4. Tests (CTest Integration)
 # -----------------------------------------------------------------------------
 if(PDHCG_BUILD_TESTS)
-    if(NOT TARGET PDHCG_core)
+    if(NOT TARGET pdhcg_core)
         message(FATAL_ERROR "PDHCG_BUILD_TESTS=ON requires PDHCG_BUILD_STATIC_LIB=ON.")
     endif()
 
@@ -236,7 +203,7 @@ if(PDHCG_BUILD_TESTS)
         add_executable(${TEST_NAME} ${TEST_SRC})
         
         # Link tests to the core static library
-        target_link_libraries(${TEST_NAME} PRIVATE PDHCG_core)
+        target_link_libraries(${TEST_NAME} PRIVATE pdhcg_core)
 
         # Set up test includes
         target_include_directories(${TEST_NAME} 
@@ -260,10 +227,9 @@ endif()
 # 5. Python Bindings (Conditional)
 # -----------------------------------------------------------------------------
 if (PDHCG_BUILD_PYTHON)
-    if(NOT TARGET PDHCG_core)
+    if(NOT TARGET pdhcg_core)
         message(FATAL_ERROR "PDHCG_BUILD_PYTHON=ON requires PDHCG_BUILD_STATIC_LIB=ON.")
     endif()
-    
     add_subdirectory(python_bindings)
 endif()
 
@@ -278,8 +244,8 @@ if (PDHCG_BUILD_PYTHON)
     )
 
 else()
-    if(TARGET PDHCG_core)
-        install(TARGETS PDHCG_core
+    if(TARGET pdhcg_core)
+        install(TARGETS pdhcg_core
             ARCHIVE DESTINATION lib
         )
     endif()

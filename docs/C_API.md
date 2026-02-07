@@ -1,7 +1,7 @@
 
 ### C Interface
 
-cuPDLPx provides a C API for directly solving LPs in memory, defined in header file [`include/cupdlpx.h`](../include/cupdlpx.h). This is useful when integrating cuPDLPx into other C/C++ projects or when generating problems programmatically.
+cuPDLPx provides a C API for directly solving LPs in memory, defined in header file [`include/pdhcg.h`](../include/pdhcg.h). This is useful when integrating cuPDLPx into other C/C++ projects or when generating problems programmatically.
 
 #### Functions and Parameters
 
@@ -18,7 +18,7 @@ lp_problem_t *create_lp_problem(
     const double *objective_constant     // scalar objective offset
 );
 
-cupdlpx_result_t* solve_lp_problem(
+pdhcg_result_t* solve_lp_problem(
     const lp_problem_t* prob,
     const pdhg_parameters_t* params    // NULL → use default parameters
 );
@@ -40,7 +40,7 @@ cupdlpx_result_t* solve_lp_problem(
 
 #### Example: Solving a Small LP
 ```c
-#include "cupdlpx.h"
+#include "pdhcg.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -74,7 +74,7 @@ int main() {
         c, &A_desc, l, u, NULL, NULL, NULL);
 
     // Solve (NULL → use default parameters)
-    cupdlpx_result_t* res = solve_lp_problem(prob, NULL);
+    pdhcg_result_t* res = solve_lp_problem(prob, NULL);
 
     printf("Termination reason: %d\n", res->termination_reason);
     printf("Primal objective: %.6f\n", res->primal_objective_value);
@@ -84,7 +84,7 @@ int main() {
     }
 
     lp_problem_free(prob);
-    cupdlpx_result_free(res);
+    pdhcg_result_free(res);
 
     return 0;
 }

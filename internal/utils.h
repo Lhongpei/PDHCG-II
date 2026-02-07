@@ -135,7 +135,7 @@ extern "C"
 
     void print_initial_info(const pdhg_parameters_t *params, const lp_problem_t *problem);
 
-    void pdhg_final_log(const cupdlpx_result_t *result, const pdhg_parameters_t *params);
+    void pdhg_final_log(const pdhcg_result_t *result, const pdhg_parameters_t *params);
 
     void display_iteration_stats(const pdhg_solver_state_t *solver_state, bool verbose);
 

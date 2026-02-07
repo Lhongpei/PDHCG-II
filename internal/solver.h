@@ -16,14 +16,14 @@ limitations under the License.
 
 #pragma once
 
-#include "cupdlpx_types.h"
+#include "pdhcg_types.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-    cupdlpx_result_t *optimize(
+    pdhcg_result_t *optimize(
         const pdhg_parameters_t *params,
         const lp_problem_t *original_problem);
 

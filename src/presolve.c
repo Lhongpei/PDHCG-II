@@ -1,6 +1,6 @@
 #include "presolve.h"
 #include "PSLP_sol.h"
-#include "cupdlpx.h"
+#include "pdhcg.h"
 #include "utils.h"
 #include <float.h>
 #include <math.h>
@@ -30,38 +30,38 @@ const char *get_presolve_status_str(enum PresolveStatus_ status)
     }
 }
 
-lp_problem_t *convert_pslp_to_cupdlpx(PresolvedProblem *reduced_prob)
+lp_problem_t *convert_pslp_to_pdhcg(PresolvedProblem *reduced_prob)
 {
 
-    lp_problem_t *cupdlpx_prob = (lp_problem_t *)safe_malloc(sizeof(lp_problem_t));
+    lp_problem_t *pdhcg_prob = (lp_problem_t *)safe_malloc(sizeof(lp_problem_t));
     // TODO: handle warmstart here
-    cupdlpx_prob->primal_start = NULL;
-    cupdlpx_prob->dual_start = NULL;
+    pdhcg_prob->primal_start = NULL;
+    pdhcg_prob->dual_start = NULL;
 
-    cupdlpx_prob->objective_constant = reduced_prob->obj_offset;
-    cupdlpx_prob->objective_vector = reduced_prob->c;
+    pdhcg_prob->objective_constant = reduced_prob->obj_offset;
+    pdhcg_prob->objective_vector = reduced_prob->c;
 
-    cupdlpx_prob->constraint_lower_bound = reduced_prob->lhs;
-    cupdlpx_prob->constraint_upper_bound = reduced_prob->rhs;
-    cupdlpx_prob->variable_lower_bound = reduced_prob->lbs;
-    cupdlpx_prob->variable_upper_bound = reduced_prob->ubs;
+    pdhcg_prob->constraint_lower_bound = reduced_prob->lhs;
+    pdhcg_prob->constraint_upper_bound = reduced_prob->rhs;
+    pdhcg_prob->variable_lower_bound = reduced_prob->lbs;
+    pdhcg_prob->variable_upper_bound = reduced_prob->ubs;
 
-    cupdlpx_prob->constraint_matrix_num_nonzeros = reduced_prob->nnz;
-    cupdlpx_prob->constraint_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
-    cupdlpx_prob->constraint_matrix->row_ptr = reduced_prob->Ap;
-    cupdlpx_prob->constraint_matrix->col_ind = reduced_prob->Ai;
-    cupdlpx_prob->constraint_matrix->val = reduced_prob->Ax;
+    pdhcg_prob->constraint_matrix_num_nonzeros = reduced_prob->nnz;
+    pdhcg_prob->constraint_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
+    pdhcg_prob->constraint_matrix->row_ptr = reduced_prob->Ap;
+    pdhcg_prob->constraint_matrix->col_ind = reduced_prob->Ai;
+    pdhcg_prob->constraint_matrix->val = reduced_prob->Ax;
 
-    cupdlpx_prob->objective_matrix = NULL;
-    cupdlpx_prob->objective_matrix_num_nonzeros = 0;
+    pdhcg_prob->objective_matrix = NULL;
+    pdhcg_prob->objective_matrix_num_nonzeros = 0;
 
-    cupdlpx_prob->num_variables = reduced_prob->n;
-    cupdlpx_prob->num_constraints = reduced_prob->m;
+    pdhcg_prob->num_variables = reduced_prob->n;
+    pdhcg_prob->num_constraints = reduced_prob->m;
 
-    return cupdlpx_prob;
+    return pdhcg_prob;
 }
 
-cupdlpx_presolve_info_t *pslp_presolve(const lp_problem_t *original_prob, const pdhg_parameters_t *params)
+pdhcg_presolve_info_t *pslp_presolve(const lp_problem_t *original_prob, const pdhg_parameters_t *params)
 {
     if (original_prob->primal_start || original_prob->dual_start)
     {
@@ -74,7 +74,7 @@ cupdlpx_presolve_info_t *pslp_presolve(const lp_problem_t *original_prob, const 
     }
     clock_t start_time = clock();
 
-    cupdlpx_presolve_info_t *info = (cupdlpx_presolve_info_t *)safe_calloc(1, sizeof(cupdlpx_presolve_info_t));
+    pdhcg_presolve_info_t *info = (pdhcg_presolve_info_t *)safe_calloc(1, sizeof(pdhcg_presolve_info_t));
 
     // 1. Init Settings
     info->settings = default_settings();
@@ -122,15 +122,15 @@ cupdlpx_presolve_info_t *pslp_presolve(const lp_problem_t *original_prob, const 
                    info->presolver->reduced_prob->n,
                    info->presolver->reduced_prob->nnz);
         }
-        info->reduced_problem = convert_pslp_to_cupdlpx(info->presolver->reduced_prob);
+        info->reduced_problem = convert_pslp_to_pdhcg(info->presolver->reduced_prob);
     }
     return info;
 }
 
-cupdlpx_result_t *create_result_from_presolve(const cupdlpx_presolve_info_t *info, const lp_problem_t *original_prob)
+pdhcg_result_t *create_result_from_presolve(const pdhcg_presolve_info_t *info, const lp_problem_t *original_prob)
 {
 
-    cupdlpx_result_t *result = (cupdlpx_result_t *)safe_calloc(1, sizeof(cupdlpx_result_t));
+    pdhcg_result_t *result = (pdhcg_result_t *)safe_calloc(1, sizeof(pdhcg_result_t));
 
     if (info->presolve_status == INFEASIBLE)
     {
@@ -166,8 +166,8 @@ cupdlpx_result_t *create_result_from_presolve(const cupdlpx_presolve_info_t *inf
     return result;
 }
 
-void pslp_postsolve(cupdlpx_presolve_info_t *info,
-                    cupdlpx_result_t *result,
+void pslp_postsolve(pdhcg_presolve_info_t *info,
+                    pdhcg_result_t *result,
                     const lp_problem_t *original_prob)
 {
     postsolve(info->presolver,
@@ -195,7 +195,7 @@ void pslp_postsolve(cupdlpx_presolve_info_t *info,
     // }
 }
 
-void cupdlpx_presolve_info_free(cupdlpx_presolve_info_t *info)
+void pdhcg_presolve_info_free(pdhcg_presolve_info_t *info)
 {
     if (!info)
         return;

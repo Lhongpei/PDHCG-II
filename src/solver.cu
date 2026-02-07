@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 #include "pdhg_core_op.h"
-#include "cupdlpx.h"
+#include "pdhcg.h"
 #include "solver_state.h"
 #include "internal_types.h"
 #include "preconditioner.h"
@@ -30,12 +30,12 @@ limitations under the License.
 #include <stdio.h>
 #include <time.h>
 
-cupdlpx_result_t *optimize(const pdhg_parameters_t *input_params,
+pdhcg_result_t *optimize(const pdhg_parameters_t *input_params,
                            const lp_problem_t *original_problem)
 {
     
 
-    cupdlpx_presolve_info_t *presolve_info = NULL;
+    pdhcg_presolve_info_t *presolve_info = NULL;
     lp_problem_t *working_problem = deepcopy_problem(original_problem);
     pdhg_parameters_t copyed_params = *input_params;
     pdhg_parameters_t *params = &copyed_params;
@@ -46,8 +46,8 @@ cupdlpx_result_t *optimize(const pdhg_parameters_t *input_params,
         presolve_info = pslp_presolve(original_problem, params);
         if (presolve_info->problem_solved_during_presolve)
         {
-            cupdlpx_result_t *result = create_result_from_presolve(presolve_info, original_problem);
-            cupdlpx_presolve_info_free(presolve_info);
+            pdhcg_result_t *result = create_result_from_presolve(presolve_info, original_problem);
+            pdhcg_presolve_info_free(presolve_info);
             pdhg_final_log(result, params);
             return result;
         }
@@ -133,12 +133,12 @@ cupdlpx_result_t *optimize(const pdhg_parameters_t *input_params,
         feasibility_polish(params, state);
     }
 
-    cupdlpx_result_t *result = create_result_from_state(state, original_problem);
+    pdhcg_result_t *result = create_result_from_state(state, original_problem);
 
     if (params->presolve && presolve_info)
     {
         pslp_postsolve(presolve_info, result, original_problem);
-        cupdlpx_presolve_info_free(presolve_info);
+        pdhcg_presolve_info_free(presolve_info);
     }
 
     pdhg_final_log(result, params);
