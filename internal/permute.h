@@ -35,11 +35,11 @@ typedef struct {
 
 void generate_random_permutation(int n, int *perm);
 
-void permute_problem(lp_problem_t *qp, int *row_perm, int *col_perm);
+void permute_problem(qp_problem_t *qp, int *row_perm, int *col_perm);
 
-void randomly_permute_problem(lp_problem_t *qp, int **out_row_perm, int **out_col_perm);
+void randomly_permute_problem(qp_problem_t *qp, int **out_row_perm, int **out_col_perm);
 
-lp_problem_t *permute_problem_return_new(const lp_problem_t *qp, int *row_perm, int *col_perm);
+qp_problem_t *permute_problem_return_new(const qp_problem_t *qp, int *row_perm, int *col_perm);
 
 void generate_block_permutation(int n, int block_size, int *perm);
 void generate_random_permutation(int n, int *perm);

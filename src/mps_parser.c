@@ -419,7 +419,7 @@ typedef enum
     SEC_QMATRIX
 } MpsSection;
 
-lp_problem_t *read_mps_file(const char *filename)
+qp_problem_t *read_mps_file(const char *filename)
 {
     MpsParserState state = {0};
     MpsSection current_section = SEC_NONE;
@@ -545,7 +545,7 @@ lp_problem_t *read_mps_file(const char *filename)
         return NULL;
     }
 
-    lp_problem_t *prob = safe_calloc(1, sizeof(lp_problem_t));
+    qp_problem_t *prob = safe_calloc(1, sizeof(qp_problem_t));
 
     prob->num_variables = state.col_map.size;
     prob->num_constraints = state.row_map.size;
@@ -590,7 +590,7 @@ lp_problem_t *read_mps_file(const char *filename)
     if (coo_to_csr_component(prob->constraint_matrix, &state.coo_matrix, prob->num_constraints) != 0)
     {
         fprintf(stderr, "ERROR: Failed to convert COO Constraint matrix to CSR format.\n");
-        lp_problem_free(prob);
+        qp_problem_free(prob);
         free_parser_state(&state);
         return NULL;
     }
@@ -604,7 +604,7 @@ lp_problem_t *read_mps_file(const char *filename)
     if (coo_to_csr_component(prob->objective_matrix, &state.coo_matrix_q, prob->num_variables) != 0)
     {
         fprintf(stderr, "ERROR: Failed to convert COO Objective matrix to CSR format.\n");
-        lp_problem_free(prob);
+        qp_problem_free(prob);
         free_parser_state(&state);
         return NULL;
     }

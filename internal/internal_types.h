@@ -165,7 +165,7 @@ typedef struct
 
 typedef struct
 {
-	lp_problem_t *scaled_problem;
+	qp_problem_t *scaled_problem;
 	double *con_rescale;
 	double *var_rescale;
 	double con_bound_rescale;

@@ -23,19 +23,19 @@ limitations under the License.
 
 #define SCALING_EPSILON 1e-12
 
-static void scale_problem(lp_problem_t *problem, const double *con_rescale,
+static void scale_problem(qp_problem_t *problem, const double *con_rescale,
                           const double *var_rescale);
-static void ruiz_rescaling(lp_problem_t *problem, int num_iters,
+static void ruiz_rescaling(qp_problem_t *problem, int num_iters,
                            double *cum_con_rescale, double *cum_var_rescale);
-static void pock_chambolle_rescaling(lp_problem_t *problem, double alpha,
+static void pock_chambolle_rescaling(qp_problem_t *problem, double alpha,
                                      double *cum_con_rescale,
                                      double *cum_var_rescale);
 
 
 
-lp_problem_t *deepcopy_problem(const lp_problem_t *prob)
+qp_problem_t *deepcopy_problem(const qp_problem_t *prob)
 {
-    lp_problem_t *new_prob = (lp_problem_t *)safe_malloc(sizeof(lp_problem_t));
+    qp_problem_t *new_prob = (qp_problem_t *)safe_malloc(sizeof(qp_problem_t));
 
     new_prob->num_variables = prob->num_variables;
     new_prob->num_constraints = prob->num_constraints;
@@ -87,7 +87,7 @@ lp_problem_t *deepcopy_problem(const lp_problem_t *prob)
 }
 
 static void scale_problem(
-    lp_problem_t *problem,
+    qp_problem_t *problem,
     const double *constraint_rescaling,
     const double *variable_rescaling)
 {
@@ -125,7 +125,7 @@ static void scale_problem(
 }
 
 static void ruiz_rescaling(
-    lp_problem_t *problem,
+    qp_problem_t *problem,
     int num_iterations,
     double *cum_constraint_rescaling,
     double *cum_variable_rescaling)
@@ -192,7 +192,7 @@ static void ruiz_rescaling(
 }
 
 static void pock_chambolle_rescaling(
-    lp_problem_t *problem,
+    qp_problem_t *problem,
     double alpha,
     double *cum_constraint_rescaling,
     double *cum_variable_rescaling)
@@ -241,7 +241,7 @@ static void pock_chambolle_rescaling(
 }
 
 static void bound_obj_rescaling(
-    lp_problem_t *problem,
+    qp_problem_t *problem,
     rescale_info_t *rescale_info)
 {
     double b_norm_sq = 0.0;
@@ -283,7 +283,7 @@ static void bound_obj_rescaling(
 
 rescale_info_t *rescale_problem(
     const pdhg_parameters_t *params,
-    const lp_problem_t *working_problem)
+    const qp_problem_t *working_problem)
 {
     clock_t start_rescaling = clock();
     rescale_info_t *rescale_info =

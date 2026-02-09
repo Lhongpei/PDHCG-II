@@ -8,7 +8,7 @@ cuPDLPx provides a C API for directly solving LPs in memory, defined in header f
 The C API involves two main functions:
 
 ```c
-lp_problem_t *create_lp_problem(
+qp_problem_t *create_qp_problem(
     const double *objective_c,           // objective vector (length n)
     const matrix_desc_t *A_desc,         // constraint matrix (m×n)
     const double *con_lb,                // constraint lower bounds (length m)
@@ -18,13 +18,13 @@ lp_problem_t *create_lp_problem(
     const double *objective_constant     // scalar objective offset
 );
 
-pdhcg_result_t* solve_lp_problem(
-    const lp_problem_t* prob,
+pdhcg_result_t* solve_qp_problem(
+    const qp_problem_t* prob,
     const pdhg_parameters_t* params    // NULL → use default parameters
 );
 ```
 
-`create_lp_problem` parameters:
+`create_qp_problem` parameters:
 - `objective_c`: Objective vector. If `NULL`, defaults to all zeros.
 - `A_desc`: Matrix descriptor. Supports `matrix_dense`, `matrix_csr`, `matrix_csc`, `matrix_coo`.
 - `con_lb`: Constraint lower bounds. If `NULL`, defaults to all `-INFINITY`.
@@ -34,8 +34,8 @@ pdhcg_result_t* solve_lp_problem(
 - `objective_constant`: Scalar constant term added to the objective value. If `NULL`, defaults to `0.0`.
 
 
-`solve_lp_problem` parameters:
-- `prob`: An LP problem built with `create_LP_problem`.
+`solve_qp_problem` parameters:
+- `prob`: An LP problem built with `create_qp_problem`.
 - `params`: Solver parameters. If `NULL`, the solver will use default parameters.
 
 #### Example: Solving a Small LP
@@ -70,11 +70,11 @@ int main() {
     double u[3] = {5.0, 2.0, 8.0};
 
     // Build the problem
-    lp_problem_t* prob = create_lp_problem(
+    qp_problem_t* prob = create_qp_problem(
         c, &A_desc, l, u, NULL, NULL, NULL);
 
     // Solve (NULL → use default parameters)
-    pdhcg_result_t* res = solve_lp_problem(prob, NULL);
+    pdhcg_result_t* res = solve_qp_problem(prob, NULL);
 
     printf("Termination reason: %d\n", res->termination_reason);
     printf("Primal objective: %.6f\n", res->primal_objective_value);
@@ -83,7 +83,7 @@ int main() {
         printf("x[%d] = %.6f\n", j, res->primal_solution[j]);
     }
 
-    lp_problem_free(prob);
+    qp_problem_free(prob);
     pdhcg_result_free(res);
 
     return 0;

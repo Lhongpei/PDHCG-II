@@ -31,12 +31,12 @@ limitations under the License.
 #include <time.h>
 
 pdhcg_result_t *optimize(const pdhg_parameters_t *input_params,
-                           const lp_problem_t *original_problem)
+                           const qp_problem_t *original_problem)
 {
     
 
     pdhcg_presolve_info_t *presolve_info = NULL;
-    lp_problem_t *working_problem = deepcopy_problem(original_problem);
+    qp_problem_t *working_problem = deepcopy_problem(original_problem);
     pdhg_parameters_t copyed_params = *input_params;
     pdhg_parameters_t *params = &copyed_params;
     print_initial_info(input_params, original_problem);
@@ -143,7 +143,7 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params,
 
     pdhg_final_log(result, params);
     pdhg_solver_state_free(state);
-    lp_problem_free(working_problem);
+    qp_problem_free(working_problem);
     return result;
 }
 

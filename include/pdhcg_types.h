@@ -79,7 +79,7 @@ extern "C"
 		double *primal_start;
 		double *dual_start;
 
-	} lp_problem_t;
+	} qp_problem_t;
 
 	typedef struct
 	{

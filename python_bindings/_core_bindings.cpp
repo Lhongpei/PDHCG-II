@@ -474,7 +474,7 @@ static py::dict solve_once(
     }
 
     // build problem
-    lp_problem_t *prob = create_lp_problem(c_ptr,      // objective vector
+    qp_problem_t *prob = create_qp_problem(c_ptr,      // objective vector
                                            &view_q.desc, 
                                            &view.desc, // constraint matrix
                                            l_ptr,      // constraint lower bound
@@ -485,7 +485,7 @@ static py::dict solve_once(
     );
     if (!prob)
     {
-        throw std::runtime_error("create_lp_problem failed.");
+        throw std::runtime_error("create_qp_problem failed.");
     }
 
     // set warm start values if provided
@@ -508,12 +508,12 @@ static py::dict solve_once(
     pdhcg_result_t *res = nullptr;
     {
         py::gil_scoped_release release;
-        res = solve_lp_problem(prob, &local_params);
+        res = solve_qp_problem(prob, &local_params);
     }
-    lp_problem_free(prob);
+    qp_problem_free(prob);
     if (!res)
     {
-        throw std::runtime_error("solve_lp_problem returned NULL.");
+        throw std::runtime_error("solve_qp_problem returned NULL.");
     }
 
     // parse result

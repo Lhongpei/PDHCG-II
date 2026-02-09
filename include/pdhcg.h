@@ -23,8 +23,8 @@ extern "C"
 {
 #endif
 
-    // create an lp_problem_t from a matrix descriptor
-    lp_problem_t *create_lp_problem(
+    // create an qp_problem_t from a matrix descriptor
+    qp_problem_t *create_qp_problem(
         const double *objective_c,
         const matrix_desc_t *Q_desc,
         const matrix_desc_t *A_desc,
@@ -34,12 +34,12 @@ extern "C"
         const double *var_ub,
         const double *objective_constant);
 
-    // Set up initial primal and dual solution for an lp_problem_t
-    void set_start_values(lp_problem_t *prob, const double *primal, const double *dual);
+    // Set up initial primal and dual solution for an qp_problem_t
+    void set_start_values(qp_problem_t *prob, const double *primal, const double *dual);
 
     // solve the LP problem using PDHG
-    pdhcg_result_t *solve_lp_problem(
-        const lp_problem_t *prob,
+    pdhcg_result_t *solve_qp_problem(
+        const qp_problem_t *prob,
         const pdhg_parameters_t *params);
 
     // parameter
@@ -47,7 +47,7 @@ extern "C"
 
     void pdhcg_result_free(pdhcg_result_t *results);
 
-    void lp_problem_free(lp_problem_t *prob);
+    void qp_problem_free(qp_problem_t *prob);
 
 #ifdef __cplusplus
 } // extern "C"

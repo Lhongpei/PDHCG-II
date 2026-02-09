@@ -329,7 +329,7 @@ int run_pdhcg(int argc, char *argv[])
         return 1;
     }
 
-    lp_problem_t *problem = read_mps_file(filename);
+    qp_problem_t *problem = read_mps_file(filename);
 
     if (problem == NULL)
     {
@@ -353,7 +353,7 @@ int run_pdhcg(int argc, char *argv[])
         pdhcg_result_free(result);
     }
 
-    lp_problem_free(problem);
+    qp_problem_free(problem);
     free(instance_name);
 
     return 0;

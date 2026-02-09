@@ -98,7 +98,7 @@ extern "C"
     void *safe_realloc(void *ptr, size_t new_size);
 
     
-    lp_problem_t *deepcopy_problem(const lp_problem_t *prob);
+    qp_problem_t *deepcopy_problem(const qp_problem_t *prob);
 
     double estimate_maximum_singular_value(
         cusparseHandle_t sparse_handle,
@@ -133,7 +133,7 @@ extern "C"
         pdhg_solver_state_t *solver_state,
         const termination_criteria_t *criteria);
 
-    void print_initial_info(const pdhg_parameters_t *params, const lp_problem_t *problem);
+    void print_initial_info(const pdhg_parameters_t *params, const qp_problem_t *problem);
 
     void pdhg_final_log(const pdhcg_result_t *result, const pdhg_parameters_t *params);
 
@@ -220,7 +220,7 @@ extern "C"
         const double *constraint_rescaling);
     CsrComponent *deepcopy_csr_component(const CsrComponent *src, size_t num_rows, size_t nnz);
     quad_obj_type_t detect_q_type(const CsrComponent *csr, int num_rows);
-    void ensure_objective_matrix_initialized(lp_problem_t *prob);
+    void ensure_objective_matrix_initialized(qp_problem_t *prob);
 #ifdef __cplusplus
 }
 

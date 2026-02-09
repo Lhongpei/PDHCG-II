@@ -22,15 +22,15 @@ limitations under the License.
 #include <stdlib.h>
 #include <string.h>
 
-// create an lp_problem_t from a matrix
-lp_problem_t *create_lp_problem(const double *objective_c,
+// create an qp_problem_t from a matrix
+qp_problem_t *create_qp_problem(const double *objective_c,
                                 const matrix_desc_t *Q_desc,
                                 const matrix_desc_t *A_desc,
                                 const double *con_lb, const double *con_ub,
                                 const double *var_lb, const double *var_ub,
                                 const double *objective_constant)
 {
-    lp_problem_t *prob = (lp_problem_t *)safe_malloc(sizeof(lp_problem_t));
+    qp_problem_t *prob = (qp_problem_t *)safe_malloc(sizeof(qp_problem_t));
     prob->primal_start = NULL;
     prob->dual_start = NULL;
 
@@ -207,7 +207,7 @@ void csr_component_free(CsrComponent *csr)
     free(csr->val);
     memset(csr, 0, sizeof(*csr));
 }
-void lp_problem_free(lp_problem_t *prob)
+void qp_problem_free(qp_problem_t *prob)
 {
     if (!prob)
         return;
@@ -224,7 +224,7 @@ void lp_problem_free(lp_problem_t *prob)
     free(prob);
 }
 
-void set_start_values(lp_problem_t *prob, const double *primal,
+void set_start_values(qp_problem_t *prob, const double *primal,
                       const double *dual)
 {
     if (!prob)
@@ -257,13 +257,13 @@ void set_start_values(lp_problem_t *prob, const double *primal,
     }
 }
 
-pdhcg_result_t *solve_lp_problem(const lp_problem_t *prob,
+pdhcg_result_t *solve_qp_problem(const qp_problem_t *prob,
                                    const pdhg_parameters_t *params)
 {
     // argument checks
     if (!prob)
     {
-        fprintf(stderr, "[interface] solve_lp_problem: invalid arguments.\n");
+        fprintf(stderr, "[interface] solve_qp_problem: invalid arguments.\n");
         return NULL;
     }
 

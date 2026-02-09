@@ -53,14 +53,14 @@ extern "C"
 
     void rescale_solution(pdhg_solver_state_t *state);
     
-    pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const lp_problem_t *original_problem);
+    pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const qp_problem_t *original_problem);
     
     void perform_restart(pdhg_solver_state_t *state, const pdhg_parameters_t *params);
     
     void initialize_step_size_and_primal_weight(pdhg_solver_state_t *state, const pdhg_parameters_t *params);
     
     pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
-                                                 const lp_problem_t *original_problem,
+                                                 const qp_problem_t *original_problem,
                                                  const rescale_info_t *rescale_info);
                                                  
     void compute_fixed_point_error(pdhg_solver_state_t *state);

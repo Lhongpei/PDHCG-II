@@ -30,10 +30,10 @@ const char *get_presolve_status_str(enum PresolveStatus_ status)
     }
 }
 
-lp_problem_t *convert_pslp_to_pdhcg(PresolvedProblem *reduced_prob)
+qp_problem_t *convert_pslp_to_pdhcg(PresolvedProblem *reduced_prob)
 {
 
-    lp_problem_t *pdhcg_prob = (lp_problem_t *)safe_malloc(sizeof(lp_problem_t));
+    qp_problem_t *pdhcg_prob = (qp_problem_t *)safe_malloc(sizeof(qp_problem_t));
     // TODO: handle warmstart here
     pdhcg_prob->primal_start = NULL;
     pdhcg_prob->dual_start = NULL;
@@ -61,7 +61,7 @@ lp_problem_t *convert_pslp_to_pdhcg(PresolvedProblem *reduced_prob)
     return pdhcg_prob;
 }
 
-pdhcg_presolve_info_t *pslp_presolve(const lp_problem_t *original_prob, const pdhg_parameters_t *params)
+pdhcg_presolve_info_t *pslp_presolve(const qp_problem_t *original_prob, const pdhg_parameters_t *params)
 {
     if (original_prob->primal_start || original_prob->dual_start)
     {
@@ -127,7 +127,7 @@ pdhcg_presolve_info_t *pslp_presolve(const lp_problem_t *original_prob, const pd
     return info;
 }
 
-pdhcg_result_t *create_result_from_presolve(const pdhcg_presolve_info_t *info, const lp_problem_t *original_prob)
+pdhcg_result_t *create_result_from_presolve(const pdhcg_presolve_info_t *info, const qp_problem_t *original_prob)
 {
 
     pdhcg_result_t *result = (pdhcg_result_t *)safe_calloc(1, sizeof(pdhcg_result_t));
@@ -168,7 +168,7 @@ pdhcg_result_t *create_result_from_presolve(const pdhcg_presolve_info_t *info, c
 
 void pslp_postsolve(pdhcg_presolve_info_t *info,
                     pdhcg_result_t *result,
-                    const lp_problem_t *original_prob)
+                    const qp_problem_t *original_prob)
 {
     postsolve(info->presolver,
               result->primal_solution,
@@ -199,7 +199,7 @@ void pdhcg_presolve_info_free(pdhcg_presolve_info_t *info)
 {
     if (!info)
         return;
-    // if (info->reduced_problem) lp_problem_free(info->reduced_problem);
+    // if (info->reduced_problem) qp_problem_free(info->reduced_problem);
     if (info->presolver)
         free_presolver(info->presolver);
     if (info->settings)

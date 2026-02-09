@@ -25,7 +25,7 @@ extern "C"
 
     rescale_info_t *rescale_problem(
         const pdhg_parameters_t *params,
-        const lp_problem_t *original_problem);
+        const qp_problem_t *original_problem);
 
 #ifdef __cplusplus
 }

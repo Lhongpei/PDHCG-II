@@ -668,7 +668,7 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
 
 
 
-pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const lp_problem_t *original_problem)
+pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const qp_problem_t *original_problem)
 {
     pdhcg_result_t *results =
         (pdhcg_result_t *)safe_calloc(1, sizeof(pdhcg_result_t));

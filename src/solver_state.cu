@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <time.h>
 
-static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const lp_problem_t *problem)
+static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const qp_problem_t *problem)
 {
     state->quadratic_objective_term =
         (quadratic_objective_term_t *)safe_malloc(sizeof(quadratic_objective_term_t));
@@ -248,7 +248,7 @@ void initialize_quadratic_term_information(pdhg_solver_state_t *state,
 
 pdhg_solver_state_t *
 initialize_solver_state(const pdhg_parameters_t *params,
-                        const lp_problem_t *working_problem,
+                        const qp_problem_t *working_problem,
                         const rescale_info_t *rescale_info)
 {
     pdhg_solver_state_t *state =
@@ -682,7 +682,7 @@ void rescale_info_free(rescale_info_t *info)
         return;
     }
 
-    lp_problem_free(info->scaled_problem);
+    qp_problem_free(info->scaled_problem);
     free(info->con_rescale);
     free(info->var_rescale);
 

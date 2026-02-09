@@ -558,7 +558,7 @@ void set_default_parameters(pdhg_parameters_t *params)
     } while(0)
 
 void print_initial_info(const pdhg_parameters_t *params,
-                        const lp_problem_t *problem)
+                        const qp_problem_t *problem)
 {
     pdhg_parameters_t default_params;
     set_default_parameters(&default_params);
@@ -1661,7 +1661,7 @@ quad_obj_type_t detect_q_type(const CsrComponent *csr, int num_rows)
     return PDHCG_DIAG_Q;
 }
 
-void ensure_objective_matrix_initialized(lp_problem_t *prob)
+void ensure_objective_matrix_initialized(qp_problem_t *prob)
 {
     if (!prob) return;
     if (prob->objective_matrix == NULL)

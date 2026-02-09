@@ -53,7 +53,7 @@ void col_permute_in_place(
     free(buffer);
 }
 
-void permute_rows_structural(lp_problem_t *qp, const int *row_perm) {
+void permute_rows_structural(qp_problem_t *qp, const int *row_perm) {
     int m = qp->num_constraints;
     int nnz = qp->constraint_matrix_num_nonzeros;
     
@@ -100,7 +100,7 @@ void compute_inv_perm(int n, const int *perm, int *inv_perm) {
     for (int i = 0; i < n; i++) inv_perm[perm[i]] = i;
 }
 
-void permute_problem(lp_problem_t *qp, int *row_perm, int *col_perm) {
+void permute_problem(qp_problem_t *qp, int *row_perm, int *col_perm) {
     int m = qp->num_constraints;
     int n = qp->num_variables;
 
@@ -129,10 +129,10 @@ void permute_problem(lp_problem_t *qp, int *row_perm, int *col_perm) {
     free(inv_col_perm);
 }
 
-lp_problem_t *permute_problem_return_new(const lp_problem_t *qp, int *row_perm, int *col_perm) {
+qp_problem_t *permute_problem_return_new(const qp_problem_t *qp, int *row_perm, int *col_perm) {
     if (!qp) return NULL;
 
-    lp_problem_t *new_qp = (lp_problem_t *)malloc(sizeof(lp_problem_t));
+    qp_problem_t *new_qp = (qp_problem_t *)malloc(sizeof(qp_problem_t));
     if (!new_qp) return NULL;
 
     new_qp = deepcopy_problem(qp);
@@ -153,7 +153,7 @@ void generate_random_permutation(int n, int *perm) {
     }
 }
 
-void randomly_permute_problem(lp_problem_t *qp, int **out_row_perm, int **out_col_perm) {
+void randomly_permute_problem(qp_problem_t *qp, int **out_row_perm, int **out_col_perm) {
     int m = qp->num_constraints;
     int n = qp->num_variables;
 
@@ -203,7 +203,7 @@ void generate_block_permutation(int n, int block_size, int *perm) {
     free(block_indices);
 }
 
-void randomly_block_permute_problem(lp_problem_t *qp, 
+void randomly_block_permute_problem(qp_problem_t *qp, 
                                     int row_block_size, 
                                     int col_block_size, 
                                     int **out_row_perm, 

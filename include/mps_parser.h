@@ -18,4 +18,4 @@ limitations under the License.
 
 #include "pdhcg_types.h"
 
-lp_problem_t *read_mps_file(const char *filename);
+qp_problem_t *read_mps_file(const char *filename);
