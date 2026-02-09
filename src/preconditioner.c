@@ -41,10 +41,13 @@ qp_problem_t *deepcopy_problem(const qp_problem_t *prob)
     new_prob->num_constraints = prob->num_constraints;
     new_prob->constraint_matrix_num_nonzeros =
         prob->constraint_matrix_num_nonzeros;
-    new_prob->objective_matrix_num_nonzeros =
-        prob->objective_matrix_num_nonzeros;
+    new_prob->objective_sparse_matrix_num_nonzeros =
+        prob->objective_sparse_matrix_num_nonzeros;
+    new_prob->objective_lowrank_matrix_num_nonzeros =
+        prob->objective_lowrank_matrix_num_nonzeros;
     new_prob->objective_constant = prob->objective_constant;
-
+    new_prob->num_rank_lowrank_obj = prob->num_rank_lowrank_obj;
+    
     size_t var_bytes = prob->num_variables * sizeof(double);
     size_t con_bytes = prob->num_constraints * sizeof(double);
 
@@ -62,7 +65,8 @@ qp_problem_t *deepcopy_problem(const qp_problem_t *prob)
     memcpy(new_prob->constraint_upper_bound, prob->constraint_upper_bound,
            con_bytes);
     new_prob->constraint_matrix = deepcopy_csr_component(prob->constraint_matrix, prob->num_constraints, prob->constraint_matrix_num_nonzeros);
-    new_prob->objective_matrix = deepcopy_csr_component(prob->objective_matrix, prob->num_variables, prob->objective_matrix_num_nonzeros);
+    new_prob->objective_sparse_matrix = deepcopy_csr_component(prob->objective_sparse_matrix, prob->num_variables, prob->objective_sparse_matrix_num_nonzeros);
+    new_prob->objective_lowrank_matrix = deepcopy_csr_component(prob->objective_lowrank_matrix, prob->num_rank_lowrank_obj, prob->objective_lowrank_matrix_num_nonzeros);
 
     if (prob->primal_start)
     {
@@ -115,11 +119,21 @@ static void scale_problem(
 
     for (int q_row = 0; q_row < problem->num_variables; ++q_row)
     {
-        for (int nz_idx = problem->objective_matrix->row_ptr[q_row];
-             nz_idx < problem->objective_matrix->row_ptr[q_row + 1]; ++nz_idx)
+        for (int nz_idx = problem->objective_sparse_matrix->row_ptr[q_row];
+             nz_idx < problem->objective_sparse_matrix->row_ptr[q_row + 1]; ++nz_idx)
         {
-            int q_col = problem->objective_matrix->col_ind[nz_idx];
-            problem->objective_matrix->val[nz_idx] /= (variable_rescaling[q_row] * variable_rescaling[q_col]);
+            int q_col = problem->objective_sparse_matrix->col_ind[nz_idx];
+            problem->objective_sparse_matrix->val[nz_idx] /= (variable_rescaling[q_row] * variable_rescaling[q_col]);
+        }
+    }
+    if (problem->objective_lowrank_matrix_num_nonzeros > 0) {
+        for (int r = 0; r < problem->num_rank_lowrank_obj; ++r) {
+            for (int nz_idx = problem->objective_lowrank_matrix->row_ptr[r];
+                 nz_idx < problem->objective_lowrank_matrix->row_ptr[r + 1]; ++nz_idx) 
+            {
+                int col = problem->objective_lowrank_matrix->col_ind[nz_idx];
+                problem->objective_lowrank_matrix->val[nz_idx] /= variable_rescaling[col];
+            }
         }
     }
 }
@@ -162,16 +176,16 @@ static void ruiz_rescaling(
         }
         for (int q_row = 0; q_row < num_vars; ++q_row)
         {
-            for (int nz_idx = problem->objective_matrix->row_ptr[q_row];
-                 nz_idx <  problem->objective_matrix->row_ptr[q_row + 1]; ++nz_idx)
+            for (int nz_idx = problem->objective_sparse_matrix->row_ptr[q_row];
+                 nz_idx <  problem->objective_sparse_matrix->row_ptr[q_row + 1]; ++nz_idx)
             {
-                int q_col = problem->objective_matrix->col_ind[nz_idx];
+                int q_col = problem->objective_sparse_matrix->col_ind[nz_idx];
                 if (q_col < 0 || q_col >= num_vars)
                 {
                     fprintf(stderr, "Error: Invalid column index %d at nz_idx %d for q_row %d. Must be in [0, %d).\n",
                             q_col, nz_idx, q_row, num_vars);
                 }
-                double val = fabs(problem->objective_matrix->val[nz_idx]);
+                double val = fabs(problem->objective_sparse_matrix->val[nz_idx]);
                 if (val > var_rescale[q_col])
                     var_rescale[q_col] = val;
             }
@@ -216,11 +230,11 @@ static void pock_chambolle_rescaling(
 
     for (int q_row = 0; q_row < num_vars; ++q_row)
     {
-        for (int nz_idx = problem->objective_matrix->row_ptr[q_row];
-             nz_idx < problem->objective_matrix->row_ptr[q_row + 1]; ++nz_idx)
+        for (int nz_idx = problem->objective_sparse_matrix->row_ptr[q_row];
+             nz_idx < problem->objective_sparse_matrix->row_ptr[q_row + 1]; ++nz_idx)
         {
-            int q_col = problem->objective_matrix->col_ind[nz_idx];
-            double val = fabs(problem->objective_matrix->val[nz_idx]);
+            int q_col = problem->objective_sparse_matrix->col_ind[nz_idx];
+            double val = fabs(problem->objective_sparse_matrix->val[nz_idx]);
             var_rescale[q_col] += pow(val, 2.0 - alpha);
         }
     }
@@ -275,9 +289,17 @@ static void bound_obj_rescaling(
         problem->variable_upper_bound[i] *= rescale_info->con_bound_rescale;
         problem->objective_vector[i] *= rescale_info->obj_vec_rescale;
     }
-    for (int nnz_idx = 0; nnz_idx < problem->objective_matrix_num_nonzeros; ++nnz_idx)
+    for (int nnz_idx = 0; nnz_idx < problem->objective_sparse_matrix_num_nonzeros; ++nnz_idx)
     {
-        problem->objective_matrix->val[nnz_idx] *= rescale_info->obj_vec_rescale / rescale_info->con_bound_rescale;
+        problem->objective_sparse_matrix->val[nnz_idx] *= rescale_info->obj_vec_rescale / rescale_info->con_bound_rescale;
+    }
+    if (problem->objective_lowrank_matrix_num_nonzeros > 0) 
+    {
+        double R_scale_factor = sqrt(rescale_info->obj_vec_rescale / rescale_info->con_bound_rescale);
+        for (int nnz_idx = 0; nnz_idx < problem->objective_lowrank_matrix_num_nonzeros; ++nnz_idx)
+        {
+            problem->objective_lowrank_matrix->val[nnz_idx] *= R_scale_factor;
+        }
     }
 }
 

@@ -25,6 +25,7 @@ limitations under the License.
 // create an qp_problem_t from a matrix
 qp_problem_t *create_qp_problem(const double *objective_c,
                                 const matrix_desc_t *Q_desc,
+                                const matrix_desc_t *R_desc,
                                 const matrix_desc_t *A_desc,
                                 const double *con_lb, const double *con_ub,
                                 const double *var_lb, const double *var_ub,
@@ -34,143 +35,222 @@ qp_problem_t *create_qp_problem(const double *objective_c,
     prob->primal_start = NULL;
     prob->dual_start = NULL;
 
-    prob->num_variables = A_desc->n;
-    prob->num_constraints = A_desc->m;
+    int n = 0;
+    int m = 0;
+
+    if (A_desc) {
+        n = A_desc->n;
+        m = A_desc->m;
+    } else if (Q_desc) {
+        n = Q_desc->n; // Infer variables from Quadratic term if A is missing
+    } else if (R_desc) {
+        n = R_desc->n; // Infer variables from Low-Rank term if others missing
+    } else {
+        fprintf(stderr, "[interface] Error: At least one matrix (A, Q, or R) must be provided for non-trivil optimization problem.\n");
+        free(prob);
+        return NULL;
+    }
+
+    if (n == 0 && (Q_desc || R_desc || A_desc)) {
+        fprintf(stderr, "[interface] Warning: Matrix dimensions seem to be zero or inconsistent.\n");
+    }
+
+    prob->num_variables = n;
+    prob->num_constraints = m;
+
+    // --- 2. Process Constraint Matrix (A) [OPTIONAL] ---
     prob->constraint_matrix = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
-    prob->objective_matrix = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
-    // handle matrix by format
-    switch (A_desc->fmt)
+    if (A_desc)
     {
-    case matrix_dense:
-        dense_to_csr(A_desc, &prob->constraint_matrix->row_ptr,
-                     &prob->constraint_matrix->col_ind,
-                     &prob->constraint_matrix->val,
-                     &prob->constraint_matrix_num_nonzeros);
-        break;
-
-    case matrix_csc:
-    {
-        int *row_ptr = NULL, *col_ind = NULL;
-        double *vals = NULL;
-        int nnz = 0;
-        if (csc_to_csr(A_desc, &row_ptr, &col_ind, &vals, &nnz) != 0)
+        switch (A_desc->fmt)
         {
-            fprintf(stderr, "[interface] CSC->CSR failed.\n");
-            free(prob);
-            return NULL;
-        }
-        prob->constraint_matrix_num_nonzeros = nnz;
-        prob->constraint_matrix->row_ptr = row_ptr;
-        prob->constraint_matrix->col_ind = col_ind;
-        prob->constraint_matrix->val = vals;
-        break;
-    }
-
-    case matrix_coo:
-    {
-        int *row_ptr = NULL, *col_ind = NULL;
-        double *vals = NULL;
-        int nnz = 0;
-        if (coo_to_csr(A_desc, &row_ptr, &col_ind, &vals, &nnz) != 0)
+        case matrix_dense:
+            dense_to_csr(A_desc, &prob->constraint_matrix->row_ptr,
+                         &prob->constraint_matrix->col_ind,
+                         &prob->constraint_matrix->val,
+                         &prob->constraint_matrix_num_nonzeros);
+            break;
+        case matrix_csc:
         {
-            fprintf(stderr, "[interface] COO->CSR failed.\n");
-            free(prob);
-            return NULL;
+            int *row_ptr = NULL, *col_ind = NULL;
+            double *vals = NULL;
+            int nnz = 0;
+            if (csc_to_csr(A_desc, &row_ptr, &col_ind, &vals, &nnz) != 0) {
+                fprintf(stderr, "[interface] A matrix CSC->CSR failed.\n");
+                free(prob); return NULL;
+            }
+            prob->constraint_matrix_num_nonzeros = nnz;
+            prob->constraint_matrix->row_ptr = row_ptr;
+            prob->constraint_matrix->col_ind = col_ind;
+            prob->constraint_matrix->val = vals;
+            break;
         }
-        prob->constraint_matrix_num_nonzeros = nnz;
-        prob->constraint_matrix->row_ptr = row_ptr;
-        prob->constraint_matrix->col_ind = col_ind;
-        prob->constraint_matrix->val = vals;
-        break;
-    }
-
-    case matrix_csr:
-        prob->constraint_matrix_num_nonzeros = A_desc->data.csr.nnz;
-        prob->constraint_matrix->row_ptr = (int *)safe_malloc((size_t)(A_desc->m + 1) * sizeof(int));
-        prob->constraint_matrix->col_ind = (int *)safe_malloc((size_t)A_desc->data.csr.nnz * sizeof(int));
-        prob->constraint_matrix->val = (double *)safe_malloc((size_t)A_desc->data.csr.nnz * sizeof(double));
-        memcpy(prob->constraint_matrix->row_ptr, A_desc->data.csr.row_ptr,
-               (size_t)(A_desc->m + 1) * sizeof(int));
-        memcpy(prob->constraint_matrix->col_ind, A_desc->data.csr.col_ind,
-               (size_t)A_desc->data.csr.nnz * sizeof(int));
-        memcpy(prob->constraint_matrix->val, A_desc->data.csr.vals,
-               (size_t)A_desc->data.csr.nnz * sizeof(double));
-        break;
-
-    default:
-        fprintf(
-            stderr,
-            "[interface] make_problem_from_matrix: unsupported matrix format %d.\n",
-            A_desc->fmt);
-        free(prob);
-        return NULL;
-    }
-
-    switch (Q_desc->fmt)
-    {
-    case matrix_dense:
-        dense_to_csr(Q_desc, &prob->objective_matrix->row_ptr,
-                     &prob->objective_matrix->col_ind,
-                     &prob->objective_matrix->val,
-                     &prob->objective_matrix_num_nonzeros);
-        break;
-
-    case matrix_csc:
-    {
-        int *row_ptr = NULL, *col_ind = NULL;
-        double *vals = NULL;
-        int nnz = 0;
-        if (csc_to_csr(Q_desc, &row_ptr, &col_ind, &vals, &nnz) != 0)
+        case matrix_coo:
         {
-            fprintf(stderr, "[interface] CSC->CSR failed.\n");
-            free(prob);
-            return NULL;
+            int *row_ptr = NULL, *col_ind = NULL;
+            double *vals = NULL;
+            int nnz = 0;
+            if (coo_to_csr(A_desc, &row_ptr, &col_ind, &vals, &nnz) != 0) {
+                fprintf(stderr, "[interface] A matrix COO->CSR failed.\n");
+                free(prob); return NULL;
+            }
+            prob->constraint_matrix_num_nonzeros = nnz;
+            prob->constraint_matrix->row_ptr = row_ptr;
+            prob->constraint_matrix->col_ind = col_ind;
+            prob->constraint_matrix->val = vals;
+            break;
         }
-        prob->objective_matrix_num_nonzeros = nnz;
-        prob->objective_matrix->row_ptr = row_ptr;
-        prob->objective_matrix->col_ind = col_ind;
-        prob->objective_matrix->val = vals;
-        break;
+        case matrix_csr:
+            prob->constraint_matrix_num_nonzeros = A_desc->data.csr.nnz;
+            prob->constraint_matrix->row_ptr = (int *)safe_malloc((size_t)(A_desc->m + 1) * sizeof(int));
+            prob->constraint_matrix->col_ind = (int *)safe_malloc((size_t)A_desc->data.csr.nnz * sizeof(int));
+            prob->constraint_matrix->val = (double *)safe_malloc((size_t)A_desc->data.csr.nnz * sizeof(double));
+            memcpy(prob->constraint_matrix->row_ptr, A_desc->data.csr.row_ptr, (size_t)(A_desc->m + 1) * sizeof(int));
+            memcpy(prob->constraint_matrix->col_ind, A_desc->data.csr.col_ind, (size_t)A_desc->data.csr.nnz * sizeof(int));
+            memcpy(prob->constraint_matrix->val, A_desc->data.csr.vals, (size_t)A_desc->data.csr.nnz * sizeof(double));
+            break;
+        default:
+            fprintf(stderr, "[interface] A matrix: unsupported format %d.\n", A_desc->fmt);
+            free(prob); return NULL;
+        }
     }
-
-    case matrix_coo:
+    else
     {
-        int *row_ptr = NULL, *col_ind = NULL;
-        double *vals = NULL;
-        int nnz = 0;
-        if (coo_to_csr(Q_desc, &row_ptr, &col_ind, &vals, &nnz) != 0)
-        {
-            fprintf(stderr, "[interface] COO->CSR failed.\n");
-            free(prob);
-            return NULL;
-        }
-        prob->objective_matrix_num_nonzeros = nnz;
-        prob->objective_matrix->row_ptr = row_ptr;
-        prob->objective_matrix->col_ind = col_ind;
-        prob->objective_matrix->val = vals;
-        break;
+        // Handle missing A: Initialize empty 0xN matrix
+        prob->constraint_matrix_num_nonzeros = 0;
+        prob->constraint_matrix->row_ptr = (int *)safe_calloc(1, sizeof(int));
+        prob->constraint_matrix->col_ind = NULL;
+        prob->constraint_matrix->val = NULL;
     }
 
-    case matrix_csr:
-        prob->objective_matrix_num_nonzeros = Q_desc->data.csr.nnz;
-        prob->objective_matrix->row_ptr = (int *)safe_malloc((size_t)(Q_desc->m + 1) * sizeof(int));
-        prob->objective_matrix->col_ind = (int *)safe_malloc((size_t)Q_desc->data.csr.nnz * sizeof(int));
-        prob->objective_matrix->val = (double *)safe_malloc((size_t)Q_desc->data.csr.nnz * sizeof(double));
-        memcpy(prob->objective_matrix->row_ptr, Q_desc->data.csr.row_ptr,
-               (size_t)(Q_desc->m + 1) * sizeof(int));
-        memcpy(prob->objective_matrix->col_ind, Q_desc->data.csr.col_ind,
-               (size_t)Q_desc->data.csr.nnz * sizeof(int));
-        memcpy(prob->objective_matrix->val, Q_desc->data.csr.vals,
-               (size_t)Q_desc->data.csr.nnz * sizeof(double));
-        break;
-
-    default:
-        fprintf(
-            stderr,
-            "[interface] make_problem_from_matrix: unsupported matrix format %d.\n",
-            Q_desc->fmt);
-        free(prob);
-        return NULL;
+    // --- 3. Process Sparse Objective Matrix (Q) [OPTIONAL] ---
+    prob->objective_sparse_matrix = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
+    if (Q_desc)
+    {
+        switch (Q_desc->fmt)
+        {
+        case matrix_dense:
+            dense_to_csr(Q_desc, &prob->objective_sparse_matrix->row_ptr,
+                         &prob->objective_sparse_matrix->col_ind,
+                         &prob->objective_sparse_matrix->val,
+                         &prob->objective_sparse_matrix_num_nonzeros);
+            break;
+        case matrix_csc:
+        {
+            int *row_ptr = NULL, *col_ind = NULL;
+            double *vals = NULL;
+            int nnz = 0;
+            if (csc_to_csr(Q_desc, &row_ptr, &col_ind, &vals, &nnz) != 0) {
+                fprintf(stderr, "[interface] Q matrix CSC->CSR failed.\n");
+                free(prob); return NULL;
+            }
+            prob->objective_sparse_matrix_num_nonzeros = nnz;
+            prob->objective_sparse_matrix->row_ptr = row_ptr;
+            prob->objective_sparse_matrix->col_ind = col_ind;
+            prob->objective_sparse_matrix->val = vals;
+            break;
+        }
+        case matrix_coo:
+        {
+            int *row_ptr = NULL, *col_ind = NULL;
+            double *vals = NULL;
+            int nnz = 0;
+            if (coo_to_csr(Q_desc, &row_ptr, &col_ind, &vals, &nnz) != 0) {
+                fprintf(stderr, "[interface] Q matrix COO->CSR failed.\n");
+                free(prob); return NULL;
+            }
+            prob->objective_sparse_matrix_num_nonzeros = nnz;
+            prob->objective_sparse_matrix->row_ptr = row_ptr;
+            prob->objective_sparse_matrix->col_ind = col_ind;
+            prob->objective_sparse_matrix->val = vals;
+            break;
+        }
+        case matrix_csr:
+            prob->objective_sparse_matrix_num_nonzeros = Q_desc->data.csr.nnz;
+            prob->objective_sparse_matrix->row_ptr = (int *)safe_malloc((size_t)(Q_desc->m + 1) * sizeof(int));
+            prob->objective_sparse_matrix->col_ind = (int *)safe_malloc((size_t)Q_desc->data.csr.nnz * sizeof(int));
+            prob->objective_sparse_matrix->val = (double *)safe_malloc((size_t)Q_desc->data.csr.nnz * sizeof(double));
+            memcpy(prob->objective_sparse_matrix->row_ptr, Q_desc->data.csr.row_ptr, (size_t)(Q_desc->m + 1) * sizeof(int));
+            memcpy(prob->objective_sparse_matrix->col_ind, Q_desc->data.csr.col_ind, (size_t)Q_desc->data.csr.nnz * sizeof(int));
+            memcpy(prob->objective_sparse_matrix->val, Q_desc->data.csr.vals, (size_t)Q_desc->data.csr.nnz * sizeof(double));
+            break;
+        default:
+            fprintf(stderr, "[interface] Q matrix: unsupported format %d.\n", Q_desc->fmt);
+            free(prob); return NULL;
+        }
+    }
+    else 
+    {
+        prob->objective_sparse_matrix->row_ptr = (int *)safe_calloc(1, sizeof(int));
+        prob->objective_sparse_matrix->col_ind = NULL;
+        prob->objective_sparse_matrix->val = NULL;
+        prob->objective_sparse_matrix_num_nonzeros = 0;
+    }
+    // --- 4. Process Low-Rank Objective Matrix (R) [OPTIONAL] ---
+    prob->objective_lowrank_matrix = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
+    prob->num_rank_lowrank_obj = 0;
+    
+    if (R_desc)
+    {
+        prob->num_rank_lowrank_obj = R_desc->m; 
+        switch (R_desc->fmt)
+        {
+        case matrix_dense:
+            dense_to_csr(R_desc, &prob->objective_lowrank_matrix->row_ptr,
+                         &prob->objective_lowrank_matrix->col_ind,
+                         &prob->objective_lowrank_matrix->val,
+                         &prob->objective_lowrank_matrix_num_nonzeros);
+            break;
+        case matrix_csc:
+        {
+            int *row_ptr = NULL, *col_ind = NULL;
+            double *vals = NULL;
+            int nnz = 0;
+            if (csc_to_csr(R_desc, &row_ptr, &col_ind, &vals, &nnz) != 0) {
+                fprintf(stderr, "[interface] R matrix CSC->CSR failed.\n");
+                free(prob); return NULL;
+            }
+            prob->objective_lowrank_matrix_num_nonzeros = nnz;
+            prob->objective_lowrank_matrix->row_ptr = row_ptr;
+            prob->objective_lowrank_matrix->col_ind = col_ind;
+            prob->objective_lowrank_matrix->val = vals;
+            break;
+        }
+        case matrix_coo:
+        {
+            int *row_ptr = NULL, *col_ind = NULL;
+            double *vals = NULL;
+            int nnz = 0;
+            if (coo_to_csr(R_desc, &row_ptr, &col_ind, &vals, &nnz) != 0) {
+                fprintf(stderr, "[interface] R matrix COO->CSR failed.\n");
+                free(prob); return NULL;
+            }
+            prob->objective_lowrank_matrix_num_nonzeros = nnz;
+            prob->objective_lowrank_matrix->row_ptr = row_ptr;
+            prob->objective_lowrank_matrix->col_ind = col_ind;
+            prob->objective_lowrank_matrix->val = vals;
+            break;
+        }
+        case matrix_csr:
+            prob->objective_lowrank_matrix_num_nonzeros = R_desc->data.csr.nnz;
+            prob->objective_lowrank_matrix->row_ptr = (int *)safe_malloc((size_t)(R_desc->m + 1) * sizeof(int));
+            prob->objective_lowrank_matrix->col_ind = (int *)safe_malloc((size_t)R_desc->data.csr.nnz * sizeof(int));
+            prob->objective_lowrank_matrix->val = (double *)safe_malloc((size_t)R_desc->data.csr.nnz * sizeof(double));
+            memcpy(prob->objective_lowrank_matrix->row_ptr, R_desc->data.csr.row_ptr, (size_t)(R_desc->m + 1) * sizeof(int));
+            memcpy(prob->objective_lowrank_matrix->col_ind, R_desc->data.csr.col_ind, (size_t)R_desc->data.csr.nnz * sizeof(int));
+            memcpy(prob->objective_lowrank_matrix->val, R_desc->data.csr.vals, (size_t)R_desc->data.csr.nnz * sizeof(double));
+            break;
+        default:
+            fprintf(stderr, "[interface] R matrix: unsupported format %d.\n", R_desc->fmt);
+            free(prob); return NULL;
+        }
+    }
+    else
+    {
+        prob->objective_lowrank_matrix->row_ptr = (int *)safe_calloc(1, sizeof(int));
+        prob->objective_lowrank_matrix->col_ind = NULL;
+        prob->objective_lowrank_matrix->val = NULL;
+        prob->objective_lowrank_matrix_num_nonzeros = 0;
     }
 
     // default fill values
@@ -211,7 +291,8 @@ void qp_problem_free(qp_problem_t *prob)
 {
     if (!prob)
         return;
-    csr_component_free(prob->objective_matrix);
+    csr_component_free(prob->objective_sparse_matrix);
+    csr_component_free(prob->objective_lowrank_matrix);
     csr_component_free(prob->constraint_matrix);
     free(prob->variable_lower_bound);
     free(prob->variable_upper_bound);

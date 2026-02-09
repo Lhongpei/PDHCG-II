@@ -52,8 +52,8 @@ qp_problem_t *convert_pslp_to_pdhcg(PresolvedProblem *reduced_prob)
     pdhcg_prob->constraint_matrix->col_ind = reduced_prob->Ai;
     pdhcg_prob->constraint_matrix->val = reduced_prob->Ax;
 
-    pdhcg_prob->objective_matrix = NULL;
-    pdhcg_prob->objective_matrix_num_nonzeros = 0;
+    // pdhcg_prob->objective_matrix = NULL;
+    // pdhcg_prob->objective_matrix_num_nonzeros = 0;
 
     pdhcg_prob->num_variables = reduced_prob->n;
     pdhcg_prob->num_constraints = reduced_prob->m;

@@ -12,11 +12,11 @@ For a detailed explanation of the methodology, please refer to our paper: [A GPU
 
 ## Problem Formulation
 
-PDHCG solves quadratic programs in the standard form:
+PDHCG solves quadratic programs in the following form, which allow a flexibile input of quadratic objective matrix, a sparse component and a dense low-rank component:
 
 ```math
 \begin{aligned}
-\min_{x} \quad & \frac{1}{2}x^\top Q x + c^\top x \\
+\min_{x} \quad & \frac{1}{2}x^\top (Q + R^\top R) x + c^\top x \\
 \text{s.t.} \quad & \ell_c \le Ax \le u_c, \\
                   & \ell_v \le x \le u_v.
 \end{aligned}

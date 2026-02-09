@@ -219,7 +219,8 @@ extern "C"
         const double *const_ub, int num_constraints, double *primal_infeasibility,
         const double *constraint_rescaling);
     CsrComponent *deepcopy_csr_component(const CsrComponent *src, size_t num_rows, size_t nnz);
-    quad_obj_type_t detect_q_type(const CsrComponent *csr, int num_rows);
+    quad_obj_type_t detect_q_type(const CsrComponent *sparse_component, 
+    const CsrComponent *low_rank_component, int num_rows);
     void ensure_objective_matrix_initialized(qp_problem_t *prob);
 #ifdef __cplusplus
 }

@@ -31,7 +31,7 @@ typedef struct
 } cu_sparse_matrix_csr_t;
 
 typedef struct {
-	cu_sparse_matrix_csr_t *objective_matrix;
+	cu_sparse_matrix_csr_t *objective_sparse_matrix;
 	double *diagonal_objective_matrix;
 	quad_obj_type_t quad_obj_type;
 	cusparseSpMatDescr_t matQ;
@@ -40,6 +40,17 @@ typedef struct {
 	double *primal_obj_product;
 	void *primal_obj_spmv_buffer;
 	cusparseDnVecDescr_t vec_primal_obj_prod;
+	//Low rank Component
+	cu_sparse_matrix_csr_t *objective_lowrank_matrix;
+	cu_sparse_matrix_csr_t *objective_lowrank_matrix_t;
+	cusparseSpMatDescr_t matR;
+	cusparseSpMatDescr_t matRt;
+	double *Rx_product;
+	void *Rx_spmv_buffer;
+	void *RRx_spmv_buffer;
+	cusparseDnVecDescr_t vec_Rx_prod;
+	cusparseDnVecDescr_t vec_RRx_prod;
+	int num_rank_lowrank_obj;
 } quadratic_objective_term_t;
 
 typedef struct {

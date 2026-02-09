@@ -24,15 +24,13 @@ extern "C"
 #endif
 
     // create an qp_problem_t from a matrix descriptor
-    qp_problem_t *create_qp_problem(
-        const double *objective_c,
-        const matrix_desc_t *Q_desc,
-        const matrix_desc_t *A_desc,
-        const double *con_lb,
-        const double *con_ub,
-        const double *var_lb,
-        const double *var_ub,
-        const double *objective_constant);
+    qp_problem_t *create_qp_problem(const double *objective_c,
+                                const matrix_desc_t *Q_desc,
+                                const matrix_desc_t *R_desc,
+                                const matrix_desc_t *A_desc,
+                                const double *con_lb, const double *con_ub,
+                                const double *var_lb, const double *var_ub,
+                                const double *objective_constant);
 
     // Set up initial primal and dual solution for an qp_problem_t
     void set_start_values(qp_problem_t *prob, const double *primal, const double *dual);

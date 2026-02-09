@@ -431,40 +431,60 @@ static PyMatrixView get_matrix_from_python(py::object A, double zero_tol)
     // unsupported format
     throw std::invalid_argument("Unsupported matrix A: expected numpy.ndarray or scipy.sparse (csr/csc/coo)");
 }
-
 // solve function
 static py::dict solve_once(
     py::object Q,
-    py::object A,
+    py::object R,
+    py::object A, 
     py::object objective_vector,          // c
-    py::object objective_constant,        // c0 (optional → 0)
-    py::object variable_lower_bound,      // lb (optional → 0)
-    py::object variable_upper_bound,      // ub (optional → inf)
-    py::object constraint_lower_bound,    // l  (optional → -inf)
-    py::object constraint_upper_bound,    // u  (optional → inf)
-    double zero_tolerance = 0.0,          // zero filter tolerance
-    py::object params = py::none(),       // PDHG parameters (optional → default)
-    py::object primal_start = py::none(), // warm start primal solution (optional)
-    py::object dual_start = py::none()    // warm start dual solution (optional)
+    py::object objective_constant,        // c0
+    py::object variable_lower_bound,      // lb
+    py::object variable_upper_bound,      // ub
+    py::object constraint_lower_bound,    // l
+    py::object constraint_upper_bound,    // u
+    double zero_tolerance = 0.0,
+    py::object params = py::none(),
+    py::object primal_start = py::none(),
+    py::object dual_start = py::none()
 )
 {
-    // parse matrix
-    PyMatrixView view = get_matrix_from_python(A, zero_tolerance);
-    PyMatrixView view_q = get_matrix_from_python(Q, zero_tolerance);
-    const int m = view.desc.m;
-    const int n = view.desc.n;
-    // get vector pointers
+    PyMatrixView view_a, view_q, view_r;
+    if (!A.is_none()) {
+        view_a = get_matrix_from_python(A, zero_tolerance);
+    }
+
+    if (!Q.is_none()) {
+        view_q = get_matrix_from_python(Q, zero_tolerance);
+    }
+
+    if (!R.is_none()) {
+        view_r = get_matrix_from_python(R, zero_tolerance);
+    }
+
+    int n = 0;
+    int m = 0;
+
+    if (view_a.desc.n > 0) n = view_a.desc.n;
+    else if (view_q.desc.n > 0) n = view_q.desc.n;
+    else if (view_r.desc.n > 0) n = view_r.desc.n;
+
+    if (view_a.desc.m > 0) m = view_a.desc.m;
+
+    view_a.keep.owners.insert(view_a.keep.owners.end(), view_q.keep.owners.begin(), view_q.keep.owners.end());
+    view_a.keep.owners.insert(view_a.keep.owners.end(), view_r.keep.owners.begin(), view_r.keep.owners.end());
+
     ensure_len_or_null(objective_vector, "objective_vector", n);
     ensure_len_or_null(variable_lower_bound, "variable_lower_bound", n);
     ensure_len_or_null(variable_upper_bound, "variable_upper_bound", n);
     ensure_len_or_null(constraint_lower_bound, "constraint_lower_bound", m);
     ensure_len_or_null(constraint_upper_bound, "constraint_upper_bound", m);
-    const double *c_ptr = get_arr_ptr_f64_or_null(objective_vector, "objective_vector", view.keep);
-    const double *lb_ptr = get_arr_ptr_f64_or_null(variable_lower_bound, "variable_lower_bound", view.keep);
-    const double *ub_ptr = get_arr_ptr_f64_or_null(variable_upper_bound, "variable_upper_bound", view.keep);
-    const double *l_ptr = get_arr_ptr_f64_or_null(constraint_lower_bound, "constraint_lower_bound", view.keep);
-    const double *u_ptr = get_arr_ptr_f64_or_null(constraint_upper_bound, "constraint_upper_bound", view.keep);
-    // get objective constant
+
+    const double *c_ptr = get_arr_ptr_f64_or_null(objective_vector, "objective_vector", view_a.keep);
+    const double *lb_ptr = get_arr_ptr_f64_or_null(variable_lower_bound, "variable_lower_bound", view_a.keep);
+    const double *ub_ptr = get_arr_ptr_f64_or_null(variable_upper_bound, "variable_upper_bound", view_a.keep);
+    const double *l_ptr = get_arr_ptr_f64_or_null(constraint_lower_bound, "constraint_lower_bound", view_a.keep);
+    const double *u_ptr = get_arr_ptr_f64_or_null(constraint_upper_bound, "constraint_upper_bound", view_a.keep);
+
     double c0_local = 0.0;
     double *c0_ptr = nullptr;
     if (objective_constant && !objective_constant.is_none())
@@ -473,15 +493,18 @@ static py::dict solve_once(
         c0_ptr = &c0_local;
     }
 
-    // build problem
-    qp_problem_t *prob = create_qp_problem(c_ptr,      // objective vector
-                                           &view_q.desc, 
-                                           &view.desc, // constraint matrix
-                                           l_ptr,      // constraint lower bound
-                                           u_ptr,      // constraint upper bound
-                                           lb_ptr,     // variable lower bound
-                                           ub_ptr,     // variable upper bound
-                                           c0_ptr      // objective constant
+    const matrix_desc_t *q_desc_ptr = Q.is_none() ? nullptr : &view_q.desc;
+    const matrix_desc_t *r_desc_ptr = R.is_none() ? nullptr : &view_r.desc;
+    const matrix_desc_t *a_desc_ptr = A.is_none() ? nullptr : &view_a.desc;
+
+    qp_problem_t *prob = create_qp_problem(
+        c_ptr, 
+        q_desc_ptr, 
+        r_desc_ptr,
+        a_desc_ptr, 
+        l_ptr, u_ptr, 
+        lb_ptr, ub_ptr, 
+        c0_ptr
     );
     if (!prob)
     {
@@ -494,8 +517,8 @@ static py::dict solve_once(
         // validate dimensions and get pointers
         ensure_len_or_null(primal_start, "primal_start", n);
         ensure_len_or_null(dual_start, "dual_start", m);
-        const double *primal_ptr = get_arr_ptr_f64_or_null(primal_start, "primal_start", view.keep);
-        const double *dual_ptr = get_arr_ptr_f64_or_null(dual_start, "dual_start", view.keep);
+        const double *primal_ptr = get_arr_ptr_f64_or_null(primal_start, "primal_start", view_a.keep);
+        const double *dual_ptr = get_arr_ptr_f64_or_null(dual_start, "dual_start", view_a.keep);
 
         set_start_values(prob, primal_ptr, dual_ptr);
     }
@@ -567,6 +590,7 @@ PYBIND11_MODULE(_pdhcg_core, m)
 
     m.def("solve_once", &solve_once,
           py::arg("Q"),
+          py::arg("R"),
           py::arg("A"),
           py::arg("objective_vector"),
           py::arg("objective_constant") = py::none(),

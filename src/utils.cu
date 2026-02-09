@@ -396,8 +396,6 @@ const char *quad_obj_type_to_string(quad_obj_type_t type)
         return "Low Rank Q";
     case PDHCG_LOW_RANK_PLUS_SPARSE_Q:
         return "Low Rank + Sparse Q";
-    case PDHCG_LOW_RANK_PLUS_DIAG_Q:
-        return "Low Rank + Diagonal Q";
     default:
         return "UNKNOWN_Q_TYPE";
     }
@@ -1407,7 +1405,9 @@ CsrComponent *deepcopy_csr_component(const CsrComponent *src, size_t num_rows, s
 {
     if (!src)
         return NULL;
-
+    if (!src->row_ptr && nnz == 0) {
+        return NULL; 
+    }
     CsrComponent *copy = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
 
     size_t row_ptr_size = (num_rows + 1) * sizeof(int);
@@ -1633,48 +1633,82 @@ void compute_dual_feas_polish_residual(pdhg_solver_state_t *state, const pdhg_so
     double dual_slack_sum = get_vector_sum(state->blas_handle, state->num_constraints, state->ones_dual_d, state->primal_slack);
     state->dual_objective_value = (base_dual_objective + dual_slack_sum) / (state->constraint_bound_rescaling * state->objective_vector_rescaling) + state->objective_constant;
 }
-quad_obj_type_t detect_q_type(const CsrComponent *csr, int num_rows)
+quad_obj_type_t detect_q_type(const CsrComponent *sparse_component, 
+    const CsrComponent *low_rank_component, int num_rows)
 {
  
-    if (!csr || !csr->row_ptr || !csr->col_ind) {
+    if ((!sparse_component || !sparse_component->row_ptr || !sparse_component->col_ind) &&
+        (!low_rank_component || !low_rank_component->row_ptr || !low_rank_component->col_ind))
+    {
         return PDHCG_NON_Q; 
     }
 
-    int nnz = csr->row_ptr[num_rows] - csr->row_ptr[0];
-    if (nnz == 0) {
+    // int nnz = csr->row_ptr[num_rows] - csr->row_ptr[0] + 
+    int nnz_sparse = sparse_component->row_ptr[num_rows] - sparse_component->row_ptr[0];
+    int nnz_low_rank = low_rank_component->row_ptr[num_rows] - low_rank_component->row_ptr[0];
+
+    if (nnz_sparse == 0 && nnz_low_rank == 0)
+    {
         return PDHCG_NON_Q;
     }
 
-    for (int i = 0; i < num_rows; ++i)
+    if (nnz_low_rank > 0)
     {
-        int row_start = csr->row_ptr[i];
-        int row_end   = csr->row_ptr[i + 1];
-
-        for (int k = row_start; k < row_end; ++k)
+        if (nnz_sparse > 0)
         {
-            int j = csr->col_ind[k]; 
-            if (i != j) {
-                return PDHCG_SPARSE_Q;
-            }
+            return PDHCG_LOW_RANK_PLUS_SPARSE_Q;
+        }
+        else
+        {
+            return PDHCG_LOW_RANK_Q;
         }
     }
-    return PDHCG_DIAG_Q;
+    else
+    {
+        for (int i = 0; i < num_rows; ++i)
+        {
+            int row_start = sparse_component->row_ptr[i];
+            int row_end   = sparse_component->row_ptr[i + 1];
+
+            for (int k = row_start; k < row_end; ++k)
+            {
+                int j = sparse_component->col_ind[k]; 
+                if (i != j) {
+                    return PDHCG_SPARSE_Q;
+                }
+            }
+        }
+        return PDHCG_DIAG_Q;
+    }
 }
 
 void ensure_objective_matrix_initialized(qp_problem_t *prob)
 {
     if (!prob) return;
-    if (prob->objective_matrix == NULL)
+    if (prob->objective_sparse_matrix == NULL)
     {
-        prob->objective_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
+        prob->objective_sparse_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
         
-        prob->objective_matrix->row_ptr = NULL;
-        prob->objective_matrix->col_ind = NULL;
-        prob->objective_matrix->val = NULL;
+        prob->objective_sparse_matrix->row_ptr = NULL;
+        prob->objective_sparse_matrix->col_ind = NULL;
+        prob->objective_sparse_matrix->val = NULL;
     }
 
-    if (prob->objective_matrix->row_ptr == NULL)
+    if (prob->objective_sparse_matrix->row_ptr == NULL)
     {
-        prob->objective_matrix->row_ptr = (int *)safe_calloc(prob->num_variables + 1, sizeof(int));
+        prob->objective_sparse_matrix->row_ptr = (int *)safe_calloc(prob->num_variables + 1, sizeof(int));
+    }
+    if (prob->objective_lowrank_matrix == NULL)
+    {
+        prob->objective_lowrank_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
+        
+        prob->objective_lowrank_matrix->row_ptr = NULL;
+        prob->objective_lowrank_matrix->col_ind = NULL;
+        prob->objective_lowrank_matrix->val = NULL;
+    }
+
+    if (prob->objective_lowrank_matrix->row_ptr == NULL)
+    {
+        prob->objective_lowrank_matrix->row_ptr = (int *)safe_calloc(prob->num_variables + 1, sizeof(int));
     }
 }

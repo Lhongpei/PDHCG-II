@@ -54,7 +54,6 @@ extern "C"
 		PDHCG_DIAG_Q,
 		PDHCG_LOW_RANK_PLUS_SPARSE_Q,
 		PDHCG_LOW_RANK_Q,
-		PDHCG_LOW_RANK_PLUS_DIAG_Q,
 		PDHCG_NON_Q
 	} quad_obj_type_t;
 
@@ -62,6 +61,7 @@ extern "C"
 	{
 		int num_variables;
 		int num_constraints;
+		int num_rank_lowrank_obj;
 		double *variable_lower_bound;
 		double *variable_upper_bound;
 		double *objective_vector;
@@ -70,8 +70,11 @@ extern "C"
 		CsrComponent *constraint_matrix;
 		int constraint_matrix_num_nonzeros;
 
-		CsrComponent *objective_matrix;
-		int objective_matrix_num_nonzeros;
+		CsrComponent *objective_sparse_matrix;
+		int objective_sparse_matrix_num_nonzeros;
+
+		CsrComponent *objective_lowrank_matrix;
+		int objective_lowrank_matrix_num_nonzeros;
 
 		double *constraint_lower_bound;
 		double *constraint_upper_bound;

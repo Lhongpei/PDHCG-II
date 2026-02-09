@@ -550,7 +550,10 @@ qp_problem_t *read_mps_file(const char *filename)
     prob->num_variables = state.col_map.size;
     prob->num_constraints = state.row_map.size;
     prob->constraint_matrix_num_nonzeros = state.coo_matrix.nnz;
-    prob->objective_matrix_num_nonzeros = state.coo_matrix_q.nnz;
+    prob->objective_sparse_matrix_num_nonzeros = state.coo_matrix_q.nnz;
+    prob->num_rank_lowrank_obj = 0;
+    prob->objective_lowrank_matrix_num_nonzeros = 0;
+    prob->objective_lowrank_matrix = NULL;
     prob->objective_constant =
         state.is_maximize ? -state.objective_constant : state.objective_constant;
 
@@ -575,7 +578,7 @@ qp_problem_t *read_mps_file(const char *filename)
         {
             prob->objective_vector[i] *= -1.0;
         }
-        for (int i = 0; i < prob->objective_matrix_num_nonzeros; ++i)
+        for (int i = 0; i < prob->objective_sparse_matrix_num_nonzeros; ++i)
         {
             state.coo_matrix_q.values[i] *= -1.0;
         }
@@ -587,6 +590,7 @@ qp_problem_t *read_mps_file(const char *filename)
     prob->constraint_matrix->col_ind = NULL;
     prob->constraint_matrix->val = NULL;
 
+    
     if (coo_to_csr_component(prob->constraint_matrix, &state.coo_matrix, prob->num_constraints) != 0)
     {
         fprintf(stderr, "ERROR: Failed to convert COO Constraint matrix to CSR format.\n");
@@ -595,20 +599,24 @@ qp_problem_t *read_mps_file(const char *filename)
         return NULL;
     }
 
-    prob->objective_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
+    prob->objective_sparse_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
     
-    prob->objective_matrix->row_ptr = NULL;
-    prob->objective_matrix->col_ind = NULL;
-    prob->objective_matrix->val = NULL;
+    prob->objective_sparse_matrix->row_ptr = NULL;
+    prob->objective_sparse_matrix->col_ind = NULL;
+    prob->objective_sparse_matrix->val = NULL;
 
-    if (coo_to_csr_component(prob->objective_matrix, &state.coo_matrix_q, prob->num_variables) != 0)
+    if (coo_to_csr_component(prob->objective_sparse_matrix, &state.coo_matrix_q, prob->num_variables) != 0)
     {
         fprintf(stderr, "ERROR: Failed to convert COO Objective matrix to CSR format.\n");
         qp_problem_free(prob);
         free_parser_state(&state);
         return NULL;
     }
-
+    prob->objective_lowrank_matrix = (CsrComponent *)safe_malloc(sizeof(CsrComponent));
+    
+    prob->objective_lowrank_matrix->row_ptr = (int *)safe_calloc(1, sizeof(int));;
+    prob->objective_lowrank_matrix->col_ind = NULL;
+    prob->objective_lowrank_matrix->val = NULL;
 
     free_parser_state(&state);
     return prob;

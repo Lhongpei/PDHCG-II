@@ -461,6 +461,8 @@ void pdhg_update(pdhg_solver_state_t *state)
             break;
         }
     case PDHCG_SPARSE_Q:
+    case PDHCG_LOW_RANK_Q:
+    case PDHCG_LOW_RANK_PLUS_SPARSE_Q:
         {
             primal_BB_step_size_update(state, primal_step_size);
             break;

@@ -80,12 +80,13 @@ class Model:
     A class representing a linear programming model.
     """
     def __init__(
-        self,
+self,
         objective_vector: ArrayLike,
-        objective_matrix: Union[np.ndarray, sp.spmatrix],
-        constraint_matrix: Union[np.ndarray, sp.spmatrix],
-        constraint_lower_bound: Optional[ArrayLike],
-        constraint_upper_bound: Optional[ArrayLike],
+        constraint_matrix: Optional[Union[np.ndarray, sp.spmatrix]] = None,
+        constraint_lower_bound: Optional[ArrayLike] = None,
+        constraint_upper_bound: Optional[ArrayLike] = None,
+        objective_matrix: Optional[Union[np.ndarray, sp.spmatrix]] = None, 
+        objective_matrix_low_rank: Optional[Union[np.ndarray, sp.spmatrix]] = None, 
         variable_lower_bound: Optional[ArrayLike] = None,
         variable_upper_bound: Optional[ArrayLike] = None,
         objective_constant: float = 0.0,
@@ -105,13 +106,38 @@ class Model:
         If variable bounds are not provided, they default to -inf and +inf respectively.    
         """
         # problem dimensions
-        if not hasattr(constraint_matrix, "shape") or len(constraint_matrix.shape) != 2:
-            raise ValueError("constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
-        if not hasattr(objective_matrix, "shape") or len(objective_matrix.shape) != 2:
-            raise ValueError("objective_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
-        m, n = constraint_matrix.shape
-        self.num_vars = int(n)
-        self.num_constrs = int(m)
+        self.num_vars = 0
+        self.num_constrs = 0
+
+        # Check A
+        if constraint_matrix is not None:
+             if not hasattr(constraint_matrix, "shape") or len(constraint_matrix.shape) != 2:
+                raise ValueError("constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
+             m, n = constraint_matrix.shape
+             self.num_vars = int(n)
+             self.num_constrs = int(m)
+        
+        # Check Q (if A was None, try to infer n from Q)
+        if objective_matrix is not None:
+            if not hasattr(objective_matrix, "shape") or len(objective_matrix.shape) != 2:
+                raise ValueError("objective_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
+            if self.num_vars == 0:
+                self.num_vars = int(objective_matrix.shape[1])
+            elif objective_matrix.shape[1] != self.num_vars:
+                raise ValueError(f"objective_matrix dimensions mismatch variables ({self.num_vars})")
+
+        # Check R (if A and Q were None, try to infer n from R)
+        if objective_matrix_low_rank is not None:
+            if not hasattr(objective_matrix_low_rank, "shape") or len(objective_matrix_low_rank.shape) != 2:
+                 raise ValueError("objective_matrix_low_rank must be a 2D numpy.ndarray or scipy.sparse matrix.")
+            if self.num_vars == 0:
+                self.num_vars = int(objective_matrix_low_rank.shape[1])
+            elif objective_matrix_low_rank.shape[1] != self.num_vars:
+                raise ValueError(f"objective_matrix_low_rank dimensions mismatch variables ({self.num_vars})")
+
+        if self.num_vars == 0 and constraint_matrix is None and objective_matrix is None and objective_matrix_low_rank is None:
+             return None
+
         # sense
         self.ModelSense = PDHCG.MINIMIZE
         # always start from backend defaults PDHCG params
@@ -121,6 +147,7 @@ class Model:
         self.setObjectiveVector(objective_vector)
         self.setObjectiveConstant(objective_constant)
         self.setObjectiveMatrix(objective_matrix)
+        self.setObjectiveMatrixLowRank(objective_matrix_low_rank)
         self.setConstraintMatrix(constraint_matrix)
         self.setConstraintLowerBound(constraint_lower_bound)
         self.setConstraintUpperBound(constraint_upper_bound)
@@ -175,6 +202,10 @@ class Model:
         """
         Overwrite constraint matrix A.
         """
+        if Q_like is None:
+            self.Q = None
+            self._clear_solution_cache()
+            return
         if not isinstance(Q_like, (np.ndarray, sp.spmatrix)):
             raise TypeError("setConstraintMatrix: Q must be a numpy.ndarray or scipy.sparse matrix")
         if len(Q_like.shape) != 2:
@@ -189,11 +220,41 @@ class Model:
         # problem dimensions
         if not hasattr(self.Q, "shape") or len(self.Q.shape) != 2:
             raise ValueError("constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
+        
+    def setObjectiveMatrixLowRank(self, R_like: ArrayLike) -> None:
+        """
+        Overwrite low-rank objective matrix R.
+        """
+        if R_like is None:
+            self.R = None
+            self._clear_solution_cache()
+            return
+
+        if not isinstance(R_like, (np.ndarray, sp.spmatrix)):
+            raise TypeError("setObjectiveMatrixLowRank: R must be a numpy.ndarray or scipy.sparse matrix")
+        if len(R_like.shape) != 2:
+            raise ValueError(f"setObjectiveMatrixLowRank: R must be 2D, got shape {R_like.shape}")
+        if R_like.shape[1] != self.num_vars:
+            raise ValueError(f"setObjectiveMatrixLowRank: R columns {R_like.shape[1]} must match variables ({self.num_vars})")
+        
+        if sp.issparse(R_like):
+            self.R = _as_csr_f64_i32(R_like)
+        else:
+            self.R = _as_dense_f64_c(R_like)
+        
+        self._clear_solution_cache()
     
     def setConstraintMatrix(self, A_like: ArrayLike) -> None:
         """
         Overwrite constraint matrix A.
         """
+        if A_like is None:
+            self.A = None
+            self.num_constrs = 0
+            self.constr_lb = None
+            self.constr_ub = None
+            self._clear_solution_cache()
+            return
         if not isinstance(A_like, (np.ndarray, sp.spmatrix)):
             raise TypeError("setConstraintMatrix: A must be a numpy.ndarray or scipy.sparse matrix")
         if len(A_like.shape) != 2:
@@ -385,6 +446,7 @@ class Model:
         # call the core solver
         info = solve_once(
             self.Q,
+            self.R,
             self.A,
             c_eff,
             c0_eff,
