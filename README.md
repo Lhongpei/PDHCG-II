@@ -1,4 +1,4 @@
-# PDHCG: A GPU-Accelerated Solver for Quadratic Programming
+# PDHCG-II: A GPU-Accelerated Solver for Quadratic Programming
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Publication](https://img.shields.io/badge/DOI-10.1287/ijoc.2024.0983-B31B1B.svg)](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983)
