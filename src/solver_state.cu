@@ -173,7 +173,7 @@ static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const qp_p
     else
     {
         state->quadratic_objective_term->quad_obj_type = 
-            detect_q_type(problem->objective_sparse_matrix, problem->objective_lowrank_matrix, problem->num_variables);
+            detect_q_type(problem->objective_sparse_matrix, problem->objective_lowrank_matrix, problem->num_variables, problem->num_rank_lowrank_obj);
     }
 
     int n = problem->num_variables;

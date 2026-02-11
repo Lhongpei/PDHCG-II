@@ -1603,7 +1603,7 @@ void compute_dual_feas_polish_residual(pdhg_solver_state_t *state, const pdhg_so
     state->dual_objective_value = (base_dual_objective + dual_slack_sum) / (state->constraint_bound_rescaling * state->objective_vector_rescaling) + state->objective_constant;
 }
 quad_obj_type_t detect_q_type(const CsrComponent *sparse_component, 
-    const CsrComponent *low_rank_component, int num_rows)
+    const CsrComponent *low_rank_component, int num_rows_sparse, int num_rows_low_rank)
 {
  
     if ((!sparse_component || !sparse_component->row_ptr || !sparse_component->col_ind) &&
@@ -1612,9 +1612,8 @@ quad_obj_type_t detect_q_type(const CsrComponent *sparse_component,
         return PDHCG_NON_Q; 
     }
 
-    // int nnz = csr->row_ptr[num_rows] - csr->row_ptr[0] + 
-    int nnz_sparse = sparse_component->row_ptr[num_rows] - sparse_component->row_ptr[0];
-    int nnz_low_rank = low_rank_component->row_ptr[num_rows] - low_rank_component->row_ptr[0];
+    int nnz_sparse = sparse_component->row_ptr[num_rows_sparse] - sparse_component->row_ptr[0];
+    int nnz_low_rank = low_rank_component->row_ptr[num_rows_low_rank] - low_rank_component->row_ptr[0];
 
     if (nnz_sparse == 0 && nnz_low_rank == 0)
     {
@@ -1634,7 +1633,7 @@ quad_obj_type_t detect_q_type(const CsrComponent *sparse_component,
     }
     else
     {
-        for (int i = 0; i < num_rows; ++i)
+        for (int i = 0; i < num_rows_sparse; ++i)
         {
             int row_start = sparse_component->row_ptr[i];
             int row_end   = sparse_component->row_ptr[i + 1];
