@@ -79,18 +79,6 @@ endif()
 
 include(FetchContent)
 
-set(PSLP_VERSION_TAG "v0.0.3")
-
-FetchContent_Declare(
-  pslp
-  GIT_REPOSITORY https://github.com/dance858/PSLP.git
-  GIT_TAG        ${PSLP_VERSION_TAG}
-)
-
-FetchContent_MakeAvailable(pslp)
-include_directories(${pslp_SOURCE_DIR}/PSLP)
-add_compile_definitions(PSLP_VERSION=\"${PSLP_VERSION_TAG}\")
-
 # -----------------------------------------------------------------------------
 # SOURCE DISCOVERY & TARGET DEFINITION
 # -----------------------------------------------------------------------------
@@ -116,7 +104,6 @@ set(CORE_LINK_LIBS PUBLIC
   CUDA::cublas
   CUDA::cusparse
   ZLIB::ZLIB
-  PSLP
 )
 
 # -----------------------------------------------------------------------------

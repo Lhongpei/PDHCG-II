@@ -531,7 +531,6 @@ void set_default_parameters(pdhg_parameters_t *params)
     params->restart_params.i_smooth = 0.3;
 
     params->optimality_norm = NORM_TYPE_L2;
-    params->presolve = true;
 }
 
 #define PRINT_DIFF_INT(name, current, default_val) \
@@ -646,10 +645,6 @@ void pdhg_final_log(
     }
     printf("Solution Summary\n");
     printf("  Status             : %s\n", termination_reason_to_string(result->termination_reason));
-    if (params->presolve)
-    {
-        printf("  Presolve time      : %.3g sec\n", result->presolve_time);
-    }
     printf("  Solve time         : %.3g sec\n", result->cumulative_time_sec);
     printf("  Iterations         : %d\n", result->total_count);
     printf("  Primal objective   : %.10g\n", result->primal_objective_value);
@@ -657,32 +652,6 @@ void pdhg_final_log(
     printf("  Objective gap      : %.3e\n", result->relative_objective_gap);
     printf("  Primal infeas      : %.3e\n", result->relative_primal_residual);
     printf("  Dual infeas        : %.3e\n", result->relative_dual_residual);
-
-    // if (stats != NULL && stats->n_rows_original > 0) {
-    //     printf("\nPresolve Summary\n");
-    //     printf("  [Dimensions]\n");
-    //     printf("  Original           : %d rows, %d cols, %d nnz\n",
-    //            stats->n_rows_original, stats->n_cols_original, stats->nnz_original);
-    //     printf("  Reduced            : %d rows, %d cols, %d nnz\n",
-    //            stats->n_rows_reduced, stats->n_cols_reduced, stats->nnz_reduced);
-
-    //     printf("  [Reduction Details (NNZ Removed)]\n");
-    //     printf("  Trivial            : %d\n", stats->nnz_removed_trivial);
-    //     printf("  Fast               : %d\n", stats->nnz_removed_fast);
-    //     printf("  Primal Propagation : %d\n", stats->nnz_removed_primal_propagation);
-    //     printf("  Parallel Rows      : %d\n", stats->nnz_removed_parallel_rows);
-    //     printf("  Parallel Cols      : %d\n", stats->nnz_removed_parallel_cols);
-
-    //     printf("  [Timing]\n");
-    //     printf("  Total Presolve     : %.3g sec\n", stats->presolve_total_time);
-    //     printf("  Init               : %.3g sec\n", stats->ps_time_init);
-    //     printf("  Fast               : %.3g sec\n", stats->ps_time_fast);
-    //     printf("  Medium             : %.3g sec\n", stats->ps_time_medium);
-    //     printf("  Primal Propagation : %.3g sec\n", stats->ps_time_primal_propagation);
-    //     printf("  Parallel Rows      : %.3g sec\n", stats->ps_time_parallel_rows);
-    //     printf("  Parallel Cols      : %.3g sec\n", stats->ps_time_parallel_cols);
-    //     printf("  Postsolve          : %.3g sec\n", stats->ps_time_post_solve);
-    // }
 }
 
 void display_iteration_stats(const pdhg_solver_state_t *state, bool verbose)

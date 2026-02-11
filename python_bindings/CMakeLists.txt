@@ -22,13 +22,6 @@ set_target_properties(_pdhcg_core PROPERTIES
 # better error messages from pybind11
 target_compile_definitions(_pdhcg_core PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES=1)
 
-# install into the Python package directory
-install(TARGETS PSLP
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION lib
-  ARCHIVE DESTINATION lib
-)
-
 install(TARGETS _pdhcg_core
   LIBRARY DESTINATION pdhcg
   RUNTIME DESTINATION pdhcg

@@ -2,7 +2,6 @@
 #include "solver_state.h"
 #include "internal_types.h"
 #include "preconditioner.h"
-#include "presolve.h"
 #include "solver.h"
 #include "utils.h"
 #include <cublas_v2.h>

@@ -267,9 +267,6 @@ static py::dict get_default_params_py()
     d["sv_max_iter"] = p.sv_max_iter;
     d["sv_tol"] = p.sv_tol;
 
-    // presolve
-    d["presolve"] = p.presolve;
-
     return d;
 }
 
@@ -336,9 +333,6 @@ static void parse_params_from_python(py::object params_obj, pdhg_parameters_t *p
     // power method for singular value estimation
     geti("sv_max_iter", p->sv_max_iter);
     getf("sv_tol", p->sv_tol);
-
-    // presolve
-    getb("presolve", p->presolve);
 }
 
 // view of matrix from Python

@@ -16,7 +16,6 @@ limitations under the License.
 
 #pragma once
 
-#include "PSLP_stats.h"
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -120,7 +119,6 @@ extern "C"
 		double reflection_coefficient;
 		bool feasibility_polishing;
 		norm_type_t optimality_norm;
-		bool presolve;
 	} pdhg_parameters_t;
 
 	typedef struct
@@ -141,9 +139,6 @@ extern "C"
 		int total_inner_count;
 		double rescaling_time_sec;
 		double cumulative_time_sec;
-		double presolve_time;
-		int presolve_status;
-		// PresolveStats presolve_stats;
 
 		double absolute_primal_residual;
 		double relative_primal_residual;

@@ -19,7 +19,6 @@ limitations under the License.
 #include "solver_state.h"
 #include "internal_types.h"
 #include "preconditioner.h"
-#include "presolve.h"
 #include "solver.h"
 #include "utils.h"
 #include <cublas_v2.h>
@@ -33,30 +32,10 @@ limitations under the License.
 pdhcg_result_t *optimize(const pdhg_parameters_t *input_params,
                            const qp_problem_t *original_problem)
 {
-    
-
-    // pdhcg_presolve_info_t *presolve_info = NULL;
     qp_problem_t *working_problem = deepcopy_problem(original_problem);
     pdhg_parameters_t copyed_params = *input_params;
     pdhg_parameters_t *params = &copyed_params;
     print_initial_info(input_params, original_problem);
-
-    if (working_problem->objective_sparse_matrix_num_nonzeros != 0 || 
-        working_problem->objective_lowrank_matrix_num_nonzeros != 0) params->presolve = false;
-
-    // if (params->presolve)
-    // {
-    //     presolve_info = pslp_presolve(original_problem, params);
-    //     if (presolve_info->problem_solved_during_presolve)
-    //     {
-    //         pdhcg_result_t *result = create_result_from_presolve(presolve_info, original_problem);
-    //         pdhcg_presolve_info_free(presolve_info);
-    //         pdhg_final_log(result, params);
-    //         return result;
-    //     }
-    //     working_problem = presolve_info->reduced_problem;
-    //     ensure_objective_matrix_initialized(working_problem);
-    // }
     
     rescale_info_t *rescale_info = rescale_problem(params, working_problem);
     pdhg_solver_state_t *state = initialize_solver_state(params, working_problem, rescale_info);
@@ -137,12 +116,6 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params,
     }
 
     pdhcg_result_t *result = create_result_from_state(state, original_problem);
-
-    // if (params->presolve && presolve_info)
-    // {
-    //     pslp_postsolve(presolve_info, result, original_problem);
-    //     pdhcg_presolve_info_free(presolve_info);
-    // }
 
     pdhg_final_log(result, params);
     pdhg_solver_state_free(state);

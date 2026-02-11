@@ -16,7 +16,6 @@ limitations under the License.
 
 #include "pdhcg.h"
 #include "mps_parser.h"
-#include "presolve.h"
 #include "solver.h"
 #include "utils.h"
 #include <getopt.h>
@@ -121,31 +120,7 @@ void save_solver_summary(const pdhcg_result_t *result, const char *output_dir,
     fprintf(outfile, "Rows: %d\n", result->num_constraints);
     fprintf(outfile, "Columns: %d\n", result->num_variables);
     fprintf(outfile, "Nonzeros: %d\n", result->num_nonzeros);
-    if (result->presolve_time > 0.0)
-    {
-        fprintf(outfile, "Presolve Status: %s\n", get_presolve_status_str(result->presolve_status));
-        fprintf(outfile, "Presolve Time (sec): %e\n", result->presolve_time);
-        fprintf(outfile, "Reduced Rows: %d\n", result->num_reduced_constraints);
-        fprintf(outfile, "Reduced Columns: %d\n", result->num_reduced_variables);
-        fprintf(outfile, "Reduced Nonzeros: %d\n", result->num_reduced_nonzeros);
 
-        // if (result->presolve_stats.n_cols_original > 0) {
-        //     fprintf(outfile, "NNZ Removed Trivial: %d\n", result->presolve_stats.nnz_removed_trivial);
-        //     fprintf(outfile, "NNZ Removed Fast: %d\n", result->presolve_stats.nnz_removed_fast);
-        //     fprintf(outfile, "NNZ Removed Primal Propagation: %d\n", result->presolve_stats.nnz_removed_primal_propagation);
-        //     fprintf(outfile, "NNZ Removed Parallel Rows: %d\n", result->presolve_stats.nnz_removed_parallel_rows);
-        //     fprintf(outfile, "NNZ Removed Parallel Cols: %d\n", result->presolve_stats.nnz_removed_parallel_cols);
-            
-        //     fprintf(outfile, "Presolve Time Init (sec): %e\n", result->presolve_stats.time_init);
-        //     fprintf(outfile, "Presolve Time Run (sec): %e\n", result->presolve_stats.time_presolve);
-        //     fprintf(outfile, "Presolve Time Fast (sec): %e\n", result->presolve_stats.time_fast_reductions);
-        //     fprintf(outfile, "Presolve Time Medium (sec): %e\n", result->presolve_stats.time_medium_reductions);
-        //     fprintf(outfile, "Presolve Time Primal Proppagation (sec): %e\n", result->presolve_stats.time_primal_propagation);
-        //     fprintf(outfile, "Presolve Time Parallel Rows (sec): %e\n", result->presolve_stats.time_parallel_rows);
-        //     fprintf(outfile, "Presolve Time Parallel Cols (sec): %e\n", result->presolve_stats.time_parallel_cols);
-        //     fprintf(outfile, "Postsolve Time (sec): %e\n", result->presolve_stats.time_postsolve);
-        // }
-    }
     if (result->feasibility_polishing_time > 0.0)
     {
         fprintf(outfile, "Feasibility Polishing Time (sec): %e\n", result->feasibility_polishing_time);
@@ -207,8 +182,6 @@ void print_usage(const char *prog_name)
                     "polish tolerance (default: 1e-6).\n");
     fprintf(stderr, "      --opt_norm <norm_type>          "
                     "Norm for optimality criteria: l2 or linf (default: l2).\n");
-    fprintf(stderr, "      --no_presolve                   "
-                    "Disable presolve (default: enabled).\n");
 }
 
 int run_pdhcg(int argc, char *argv[])
@@ -234,7 +207,6 @@ int run_pdhcg(int argc, char *argv[])
         {"sv_tol", required_argument, 0, 1012},
         {"eval_freq", required_argument, 0, 1013},
         {"opt_norm", required_argument, 0, 1014},
-        {"no_presolve", no_argument, 0, 1015},
         {0, 0, 0, 0}};
 
     int opt;
@@ -302,9 +274,6 @@ int run_pdhcg(int argc, char *argv[])
                     return 1;
                 }
             }
-            break;
-        case 1015: // --no_presolve
-            params.presolve = false;
             break;
         case '?': // Unknown option
             return 1;

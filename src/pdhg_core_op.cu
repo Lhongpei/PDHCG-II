@@ -3,7 +3,6 @@
 #include "solver_state.h"
 #include "internal_types.h"
 #include "preconditioner.h"
-#include "presolve.h"
 #include "solver.h"
 #include "utils.h"
 #include <cublas_v2.h>
@@ -736,12 +735,6 @@ pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const qp_pr
     results->feasibility_polishing_time = state->feasibility_polishing_time;
     results->feasibility_iteration = state->feasibility_iteration;
     results->total_inner_count = state->inner_solver->total_count;
-    // if (presolve_stats != NULL) {
-    //     results->presolve_stats = *presolve_stats;
-    // } else {
-    //     memset(&(results->presolve_stats), 0, sizeof(PresolveStats));
-    // }
-
     return results;
 }
 
