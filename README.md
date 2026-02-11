@@ -12,7 +12,7 @@ For a detailed explanation of the methodology, please refer to our paper: [A GPU
 
 ## Problem Formulation
 
-PDHCG solves quadratic programs in the following form, which allow a flexibile input of quadratic objective matrix, a sparse component and a dense low-rank component:
+PDHCG solves quadratic programs in the following form, which allows a flexibile input of quadratic objective matrix, a sparse component and a dense low-rank component:
 
 ```math
 \begin{aligned}
