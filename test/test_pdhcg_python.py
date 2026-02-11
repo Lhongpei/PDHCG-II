@@ -57,13 +57,12 @@ class TestPDHCGInterface(unittest.TestCase):
         u = np.array([1.0])
         lb = np.array([0.0, 0.0])
 
-        # Note: We pass R to `objective_matrix_low_rank`, Q is None
         m = Model(objective_vector=c,
                   constraint_matrix=A,
                   constraint_lower_bound=l,
                   constraint_upper_bound=u,
                   objective_matrix=None,
-                  objective_matrix_low_rank=R,  # <--- Input R here
+                  objective_matrix_low_rank=R,  
                   variable_lower_bound=lb)
         
         m.setParams(**self.default_params)
@@ -107,8 +106,8 @@ class TestPDHCGInterface(unittest.TestCase):
                   constraint_matrix=A,
                   constraint_lower_bound=l,
                   constraint_upper_bound=u,
-                  objective_matrix=Q,            # <--- Input Q
-                  objective_matrix_low_rank=R,   # <--- Input R
+                  objective_matrix=Q,           
+                  objective_matrix_low_rank=R,  
                   variable_lower_bound=lb)
         
         m.setParams(**self.default_params)
@@ -147,10 +146,10 @@ class TestPDHCGInterface(unittest.TestCase):
         # constraint bounds must also be None.
         m = Model(objective_vector=c,
                   objective_matrix=Q,
-                  constraint_matrix=None,       # <--- No A
+                  constraint_matrix=None,   
                   constraint_lower_bound=None,
                   constraint_upper_bound=None,
-                  variable_lower_bound=None,    # Unbounded variables
+                  variable_lower_bound=None,   
                   variable_upper_bound=None)
         
         m.setParams(**self.default_params)
@@ -161,34 +160,35 @@ class TestPDHCGInterface(unittest.TestCase):
         if m.X is not None:
             self.assertAlmostEqual(m.X[0], 1.0, places=4)
             self.assertAlmostEqual(m.X[1], 1.0, places=4)
-    # def test_simple_qp_minimization(self):
-    #     """
-    #     Existing test: Minimize 0.5 * x^T Q x + c^T x s.t. x1+x2=1, x>=0
-    #     Q = diag(4, 2), c = [1, 1]
-    #     """
-    #     print("\n[Test] Simple QP Minimization (Sparse Q)")
-    #     Q = sp.diags([4.0, 2.0], format="csc")
-    #     c = np.array([1.0, 1.0])
-    #     A = np.array([[1.0, 1.0]])
-    #     l = np.array([1.0])
-    #     u = np.array([1.0])
-    #     lb = np.array([0.0, 0.0])
+            
+    def test_qp_a_simple_minimization(self):
+        """
+        Existing test: Minimize 0.5 * x^T Q x + c^T x s.t. x1+x2=1, x>=0
+        Q = diag(4, 2), c = [1, 1]
+        """
+        print("\n[Test] Simple QP Minimization (Sparse Q)")
+        Q = sp.diags([4.0, 2.0], format="csc")
+        c = np.array([1.0, 1.0])
+        A = np.array([[1.0, 1.0]])
+        l = np.array([1.0])
+        u = np.array([1.0])
+        lb = np.array([0.0, 0.0])
         
-    #     m = Model(objective_matrix=Q, 
-    #               objective_vector=c, 
-    #               constraint_matrix=A,
-    #               constraint_lower_bound=l, 
-    #               constraint_upper_bound=u,
-    #               variable_lower_bound=lb)
+        m = Model(objective_matrix=Q, 
+                  objective_vector=c, 
+                  constraint_matrix=A,
+                  constraint_lower_bound=l, 
+                  constraint_upper_bound=u,
+                  variable_lower_bound=lb)
         
-    #     m.setParams(**self.default_params)
-    #     m.optimize()
+        m.setParams(**self.default_params)
+        m.optimize()
         
-    #     self.assertEqual(m.Status, "OPTIMAL")
-    #     # Analytical result: 5/3 ~ 1.6667
-    #     self.assertAlmostEqual(m.ObjVal, 5.0/3.0, places=4)
-    #     if m.X is not None:
-    #         self.assertAlmostEqual(m.X[0], 1.0/3.0, places=4)
-    #         self.assertAlmostEqual(m.X[1], 2.0/3.0, places=4)
+        self.assertEqual(m.Status, "OPTIMAL")
+        # Analytical result: 5/3 ~ 1.6667
+        self.assertAlmostEqual(m.ObjVal, 5.0/3.0, places=4)
+        if m.X is not None:
+            self.assertAlmostEqual(m.X[0], 1.0/3.0, places=4)
+            self.assertAlmostEqual(m.X[1], 2.0/3.0, places=4)
 if __name__ == '__main__':
     unittest.main()
