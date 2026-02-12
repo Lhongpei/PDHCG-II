@@ -127,9 +127,9 @@ u = np.array([2.0, 2.0, 3.0])
 lb = np.zeros(2)
 ub = np.array([np.inf, np.inf])
 
-# 4. Create QP model with Low-Rank term (R)
+# 4. Create QP model with Low-Rank term (R), where Q and R are both optional.
 m = Model(objective_matrix=Q,
-          objective_matrix_low_rank=R,  # <--- Pass R here
+          objective_matrix_low_rank=R,  
           objective_vector=c,
           constraint_matrix=A,
           constraint_lower_bound=l,
