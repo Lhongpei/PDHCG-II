@@ -1,11 +1,12 @@
 /*
 Copyright 2025 Haihao Lu
+Copyright 2026 Hongpei Li
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -530,7 +531,7 @@ void set_default_parameters(pdhg_parameters_t *params)
     params->restart_params.k_d = 0.0;
     params->restart_params.i_smooth = 0.3;
 
-    params->optimality_norm = NORM_TYPE_L2;
+    params->optimality_norm = NORM_TYPE_L_INF;
 }
 
 #define PRINT_DIFF_INT(name, current, default_val) \
@@ -565,7 +566,7 @@ void print_initial_info(const pdhg_parameters_t *params,
     }
     printf("---------------------------------------------------------------------"
            "------------------\n");
-    printf("                                   PDHCGv2-C                              "
+    printf("                                   PDHCG-II                              "
            "                  \n");
     printf("             A First-Order Collective Quadratic Programm Solver        "
            "                  \n");

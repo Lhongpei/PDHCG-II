@@ -4,9 +4,9 @@
 [![Publication](https://img.shields.io/badge/DOI-10.1287/ijoc.2024.0983-B31B1B.svg)](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983)
 [![arXiv](https://img.shields.io/badge/arXiv-2405.16160-b31b1b.svg)](https://arxiv.org/abs/2405.16160)
 
-**PDHCG** is a high-performance, GPU-accelerated implementation of the Primal-Dual Hybrid Gradient (PDHG) algorithm designed for solving large-scale Quadratic Programming (QP) problems. This solver is developed by Hongpei Li, Yicheng Huang, Huikang Liu, Dongdong Ge, and Yinyu Ye.
+**PDHCG** is a high-performance, GPU-accelerated implementation of the Primal-Dual Hybrid Gradient (PDHG) algorithm designed for solving large-scale Quadratic Programming (QP) problems. 
 
-For a detailed explanation of the methodology, please refer to our paper: [A GPU-Based Primal-Dual Hybrid Gradient Method for Quadratic Programming](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983).
+For a detailed explanation of the methodology, please refer to our paper: [A Restarted Primal-Dual Hybrid Conjugate Gradient Method for Large-Scale Quadratic Programming](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983).
 
 ---
 
@@ -34,8 +34,8 @@ To use the standalone C++ solver, you must compile the project using CMake.
 ### Build from Source
 Clone the repository and compile the project using CMake.
 ```bash
-git clone https://github.com/Lhongpei/PDHCGv2-C.git
-cd PDHCGv2-C
+git clone https://github.com/Lhongpei/PDHCG-II.git
+cd PDHCG-II
 cmake -B build
 cmake --build build --clean-first
 ```
@@ -57,15 +57,24 @@ Run the solver from the command line:
 1. `<MPS_FILE>`: Path to the input QP (supports `.mps`, `.qps`, and `.mps.gz`).
 2. `<OUTPUT_DIR>`: Directory where solution files will be saved.
 
-**Solver Parameters:**
+Solver Parameters:
 | Option | Type | Description | Default |
 | :--- | :--- | :--- | :--- |
-| `-h`, `--help` | `flag` | Display the help message. | N/A |
-| `-v`, `--verbose` | `flag` | Enable verbose logging. | `false` |
-| `--time_limit` | `double` | Time limit in seconds. | `3600.0` |
-| `--iter_limit` | `int` | Iteration limit. | `2147483647` |
-| `--eps_opt` | `double` | Relative optimality tolerance. | `1e-4` |
-| `--eps_feas` | `double` | Relative feasibility tolerance. | `1e-4` |
+| -h, --help | flag | Display the help message. | N/A |
+| -v, --verbose | flag | Enable verbose logging. | false |
+| --time_limit | double | Time limit in seconds. | 3600.0 |
+| --iter_limit | int | Iteration limit. | 2147483647 |
+| --eps_opt | double | Relative optimality tolerance. | 1e-4 |
+| --eps_feas | double | Relative feasibility tolerance. | 1e-4 |
+| --eps_infeas_detect | double | Infeasibility detection tolerance. | 1e-10 |
+| --l_inf_ruiz_iter | int | Iterations for L-inf Ruiz rescaling. | 10 |
+| --pock_chambolle_alpha | double | Value for Pock-Chambolle step size parameter $\alpha$. | 1.0 |
+| --no_pock_chambolle | flag | Disable Pock-Chambolle rescaling (enabled by default). | false |
+| --no_bound_obj_rescaling | flag | Disable bound objective rescaling (enabled by default). | false |
+| --sv_max_iter | int | Max iterations for singular value estimation (Power Method). | 5000 |
+| --sv_tol | double | Tolerance for singular value estimation. | 1e-4 |
+| --eval_freq | int | Frequency of termination criteria evaluation (in iterations). | 200 |
+| --opt_norm | string | Norm for optimality criteria (l2 or linf). | linf |
 
 ---
 
@@ -97,20 +106,30 @@ For detailed instructions on how to use the Python interface, including installa
 ```python
 import numpy as np
 import scipy.sparse as sp
-from pdhcg import Model, PDHCG
+from pdhcg import Model
 
-# Example: minimize 0.5 * x'Qx + c'x
+# Example: minimize 0.5 * x'(Q + R'R)x + c'x
 # subject to l <= A x <= u,  lb <= x <= ub
+
+# 1. Define Standard QP terms
 Q = sp.csc_matrix([[1.0, -1.0], [-1.0, 2.0]])
 c = np.array([-2.0, -6.0])
+
+# 2. Define Low-Rank Matrix R
+# Let's add a term 0.5 * ||Rx||^2 where R = [[1, 0]]
+# This adds 0.5 * (x1)^2 to the objective
+R = sp.csc_matrix([[1.0, 0.0]])
+
+# 3. Define Constraints
 A = sp.csc_matrix([[1.0, 1.0], [-1.0, 2.0], [2.0, 1.0]])
 l = np.array([-np.inf, -np.inf, -np.inf])
 u = np.array([2.0, 2.0, 3.0])
 lb = np.zeros(2)
 ub = np.array([np.inf, np.inf])
 
-# Create QP model
+# 4. Create QP model with Low-Rank term (R)
 m = Model(objective_matrix=Q,
+          objective_matrix_low_rank=R,  # <--- Pass R here
           objective_vector=c,
           constraint_matrix=A,
           constraint_lower_bound=l,
@@ -122,11 +141,20 @@ m = Model(objective_matrix=Q,
 m.optimize()
 
 # Print results
-print("Status:", m.Status)
-print("Objective:", m.ObjVal)
+print(f"Status: {m.Status}")
+print(f"Objective: {m.ObjVal:.4f}")
+if m.X is not None:
+    print(f"Primal Solution: {m.X}")
 ```
+
+## Acknowledgments
+
+This solver is built upon the infrastructure of [cuPDLPx](https://github.com/MIT-Lu-Lab/cuPDLPx) (originally developed by Haihao Lu). We gratefully acknowledge this project for providing the high-performance CUDA framework that serves as the foundation for this QP solver.
+
+---
+
 ## License
 
-Copyright 2024-2026 Hongpei Li.
+Copyright 2024-2026 Hongpei Li, Haihao Lu.
 
 Licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for details.

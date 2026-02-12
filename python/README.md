@@ -25,8 +25,8 @@ pip install pdhcg
 Or build from source:
 
 ```bash
-git clone https://github.com/Lhongpei/PDHCGv2-C.git
-cd PDHCGv2-C
+git clone https://github.com/Lhongpei/PDHCG-II.git
+cd PDHCG-II
 pip install .
 ```
 
@@ -37,19 +37,28 @@ import numpy as np
 import scipy.sparse as sp
 from pdhcg import Model, PDHCG
 
-# Example: minimize 0.5 * x'Qx + c'x
+# Example: minimize 0.5 * x'Qx + 0.5 * ||Rx||^2 + c'x
 # subject to l <= A x <= u,  lb <= x <= ub
+
+# 1. Define Standard QP terms
 Q = sp.csc_matrix([[1.0, -1.0], [-1.0, 2.0]])
 c = np.array([-2.0, -6.0])
+
+# 2. Define Low-Rank Matrix R
+# Let's add a term 0.5 * ||Rx||^2 where R = [[1, 0]]
+# This effectively adds 0.5 * (x1)^2 to the objective
+R = sp.csc_matrix([[1.0, 0.0]])
+
+# 3. Define Constraints
 A = sp.csc_matrix([[1.0, 1.0], [-1.0, 2.0], [2.0, 1.0]])
 l = np.array([-np.inf, -np.inf, -np.inf])
 u = np.array([2.0, 2.0, 3.0])
 lb = np.zeros(2)
 ub = np.array([np.inf, np.inf])
 
-
-# Create QP model
+# 4. Create QP model with Low-Rank term
 m = Model(objective_matrix=Q,
+          objective_matrix_low_rank=R,  # <--- Pass R here
           objective_vector=c,
           constraint_matrix=A,
           constraint_lower_bound=l,
@@ -80,14 +89,15 @@ print("Dual solution:", m.Pi)
 The `Model` class represents a quadratic programming problem of the form:
 
 $$
-\min \frac{1}{2} x^\top Q x + c^\top x + c_0 \quad
+\min \frac{1}{2} x^\top (Q + R^\top R) x + c^\top x + c_0 \quad
 \text{s.t.} \; \ell \le A x \le u, \quad
 \text{lb} \le x \le \text{ub}.
 $$
 
 ### Arguments
 
-- **objective_matrix** (`Q`): Quadratic part of the objective function. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
+- **objective_matrix** (`Q`, optional): Quadratic part of the objective function. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
+- **objective_matrix_low_rank** (`R`, optional): Low-rank factor matrix in the quadratic objective term. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
 - **objective_vector** (`c`): Linear part of the objective function.  
 - **constraint_matrix** (`A`): Coefficient matrix for the constraints. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
 - **constraint_lower_bound** (`l`): Lower bounds for each constraint. Use `-np.inf` or `None` for no lower bound.
@@ -156,8 +166,8 @@ Below is a list of commonly used parameters, their internal keys, and descriptio
 | `ReflectionCoeff` | `reflection_coefficient` | float | `1.0` | Reflection coefficient. |
 | `SVMaxIter` | `sv_max_iter` | int | 5000 | Maximum number of iterations for the power method |
 | `SVTol`| `sv_tol` | float | `1e-4` | Termination tolerance for the power method |
-| `FeasibilityPolishing` | `feasibility_polishing` | bool | `False` | Run feasibility polishing process.| 
-| `FeasibilityPolishingTol` | `eps_feas_polish_relative` | float | `1e-6` | Relative tolerance for primal/dual residual.  |
+<!-- | `FeasibilityPolishing` | `feasibility_polishing` | bool | `False` | Run feasibility polishing process.| 
+| `FeasibilityPolishingTol` | `eps_feas_polish_relative` | float | `1e-6` | Relative tolerance for primal/dual residual.  | -->
 
 They can be set in multiple ways:
 
