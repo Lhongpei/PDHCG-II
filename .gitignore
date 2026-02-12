@@ -63,3 +63,4 @@ test/*
 /_b
 *.whl
 *.pyc
+dist/pdhcg-0.1.1.tar.gz

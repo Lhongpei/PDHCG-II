@@ -13,7 +13,6 @@ recursive-include python_bindings *.cpp CMakeLists.txt
 
 graft python
 
-recursive-include test *.py
 recursive-include docs *.md
 
 global-exclude *.py[cod] __pycache__ .DS_Store *.so *.dll *.o *.obj
