@@ -150,7 +150,7 @@ if m.X is not None:
 
 ## Acknowledgments
 
-This solver is built upon the infrastructure of [cuPDLPx](https://github.com/MIT-Lu-Lab/cuPDLPx) (originally developed by Haihao Lu). We gratefully acknowledge this project for providing the high-performance CUDA framework that serves as the foundation for this QP solver.
+This solver is built upon the infrastructure of [cuPDLPx](https://github.com/MIT-Lu-Lab/cuPDLPx) (originally developed by Haihao Lu). We gratefully acknowledge this project for providing the high-performance CUDA-C framework for Linear Programming (LP) that serves as the foundation for this QP solver.
 
 ---
 
