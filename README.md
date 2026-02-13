@@ -5,7 +5,7 @@
 [![Publication](https://img.shields.io/badge/DOI-10.1287/ijoc.2024.0983-B31B1B.svg)](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983)
 [![arXiv](https://img.shields.io/badge/arXiv-2405.16160-b31b1b.svg)](https://arxiv.org/abs/2405.16160)
 
-**PDHCG** is a high-performance, GPU-accelerated implementation of the Primal-Dual Hybrid Gradient (PDHG) algorithm designed for solving large-scale Quadratic Programming (QP) problems. 
+**PDHCG** is a high-performance, GPU-accelerated implementation of the Primal-Dual Hybrid Gradient (PDHG) algorithm designed for solving large-scale Convex Quadratic Programming (QP) problems. 
 
 For a detailed explanation of the methodology, please refer to our paper: [A Restarted Primal-Dual Hybrid Conjugate Gradient Method for Large-Scale Quadratic Programming](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983).
 
@@ -13,7 +13,7 @@ For a detailed explanation of the methodology, please refer to our paper: [A Res
 
 ## Problem Formulation
 
-PDHCG solves quadratic programs in the following form, which allows a flexibile input of quadratic objective matrix, a sparse component and a dense low-rank component:
+PDHCG solves convex quadratic programs in the following form, which allows a flexibile input of convex quadratic objective matrix, a sparse component and a low-rank component:
 
 ```math
 \begin{aligned}
