@@ -177,12 +177,12 @@ void print_usage(const char *prog_name)
                     "Max iterations for singular value estimation (default: 5000).\n");
     fprintf(stderr, "      --sv_tol <float>                "
                     "Tolerance for singular value estimation (default: 1e-4).\n");
-    fprintf(stderr, "  -f  --feasibility_polishing         "
-                    "Enable feasibility use feasibility polishing (default: false).\n");
-    fprintf(stderr, "      --eps_feas_polish <tolerance>   Relative feasibility "
-                    "polish tolerance (default: 1e-6).\n");
+    // fprintf(stderr, "  -f  --feasibility_polishing         "
+    //                 "Enable feasibility use feasibility polishing (default: false).\n");
+    // fprintf(stderr, "      --eps_feas_polish <tolerance>   Relative feasibility "
+    //                 "polish tolerance (default: 1e-6).\n");
     fprintf(stderr, "      --opt_norm <norm_type>          "
-                    "Norm for optimality criteria: l2 or linf (default: l2).\n");
+                    "Norm for optimality criteria: l2 or linf (default: linf).\n");
 }
 
 int run_pdhcg(int argc, char *argv[])
