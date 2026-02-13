@@ -568,15 +568,15 @@ void print_initial_info(const pdhg_parameters_t *params,
            "------------------\n");
     printf("                                   PDHCG-II                              "
            "                  \n");
-    printf("             A First-Order Collective Quadratic Programm Solver        "
+    printf("              A GPU-Accelerated First-Order Solver for Convex QPs "
            "                  \n");
-    printf("                        Current Support Problem Class:        "
-            "                  \n");
-    printf("                    [Linear Program, Convex Quadratic Program]       "
-                "                  \n");
-    printf("                              (c) Hongpei Li, 2026                         "
+    // printf("                        Current Support Problem Class:        "
+    //         "                  \n");
+    // printf("                    [Linear Program, Convex Quadratic Program]       "
+    //             "                  \n");
+    printf("                            (c) Hongpei Li, 2026                         "
            "                  \n");
-    printf("                          Contact: ishongpeili@gmail.com                    "
+    printf("                        Contact: ishongpeili@gmail.com                    "
            "                  \n");
     printf("                                                                         "
            "                  \n");
