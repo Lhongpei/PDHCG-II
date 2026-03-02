@@ -3,11 +3,11 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![PyPI version](https://badge.fury.io/py/pdhcg.svg)](https://pypi.org/project/pdhcg/) 
 [![Publication](https://img.shields.io/badge/DOI-10.1287/ijoc.2024.0983-B31B1B.svg)](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983)
-[![arXiv](https://img.shields.io/badge/arXiv-2405.16160-b31b1b.svg)](https://arxiv.org/abs/2405.16160)
+[![arXiv](https://img.shields.io/badge/arXiv-2602.23967-b31b1b.svg)](https://arxiv.org/abs/2602.23967)
 
 **PDHCG** is a high-performance, GPU-accelerated implementation of the Primal-Dual Hybrid Gradient (PDHG) algorithm designed for solving large-scale Convex Quadratic Programming (QP) problems. 
 
-For a detailed explanation of the methodology, please refer to our paper: [A Restarted Primal-Dual Hybrid Conjugate Gradient Method for Large-Scale Quadratic Programming](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983).
+For a detailed explanation of the methodology, please refer to our papers: [A Restarted Primal-Dual Hybrid Conjugate Gradient Method for Large-Scale Quadratic Programming](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983) and [PDHCG-II: An Enhanced Version of PDHCG for Large-Scale Convex QP](https://arxiv.org/abs/2602.23967).
 
 ---
 
@@ -148,9 +148,25 @@ if m.X is not None:
     print(f"Primal Solution: {m.X}")
 ```
 
+## Citation
+If you use this software or method in your research, please cite our paper:
+```
+@misc{li2026pdhcgiienhancedversionpdhcg,
+      title={PDHCG-II: An Enhanced Version of PDHCG for Large-Scale Convex QP}, 
+      author={Hongpei Li and Yicheng Huang and Huikang Liu and Dongdong Ge and Yinyu Ye},
+      year={2026},
+      eprint={2602.23967},
+      archivePrefix={arXiv},
+      primaryClass={math.OC},
+      url={https://arxiv.org/abs/2602.23967}, 
+}
+```
+
 ## Acknowledgments
 
 This solver is built upon the infrastructure of [cuPDLPx](https://github.com/MIT-Lu-Lab/cuPDLPx) (originally developed by Haihao Lu). We gratefully acknowledge this project for providing the high-performance CUDA-C framework for Linear Programming (LP) that serves as the foundation for this QP solver.
+
+
 
 ---
 
