@@ -24,12 +24,24 @@ Install from PyPI:
 pip install pdhcg
 ```
 
+
 Or build from source:
 
 ```bash
 git clone https://github.com/Lhongpei/PDHCG-II.git
 cd PDHCG-II
 pip install .
+```
+
+If your system has multiple CUDA installations or the default nvcc (typically in `/usr/bin/nvcc`) is outdated, you must explicitly point to your modern CUDA compiler using environment variables. This ensures the build system bypasses the system default.
+
+```Bash
+# Replace '/your/path/to/nvcc' with your actual path 
+# Example: export CUDACXX=/usr/local/cuda-12.6/bin/nvcc
+export CUDACXX=/your/path/to/nvcc
+export SKBUILD_CMAKE_ARGS="-DCMAKE_CUDA_COMPILER=/your/path/to/nvcc"
+
+pip install pdhcg
 ```
 
 ## Quick Start

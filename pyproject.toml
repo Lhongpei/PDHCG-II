@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "pdhcg"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python bindings for PDHCG, GPU accelerated first order solver for Quadratic Programming"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -20,7 +20,7 @@ dependencies = ["numpy>=1.21", "scipy>=1.8"]
 
 [tool.scikit-build]
 build-dir = "build/{wheel_tag}"
-cmake.version = ">=3.20"
+cmake.version = ">=3.24"
 cmake.build-type = "Release"
 wheel.packages = ["python/pdhcg"]
 sdist.include = ["tests/**", "pyproject.toml", "README.md", "LICENSE"]

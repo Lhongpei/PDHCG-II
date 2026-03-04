@@ -30,18 +30,26 @@ To use the standalone C++ solver, you must compile the project using CMake.
 
 ### Requirements
 * **GPU:** NVIDIA GPU with CUDA 12.4+.
-* **Build Tools:** CMake (≥ 3.20), GCC, NVCC.
+* **Build Tools:** CMake (≥ 3.24), GCC, NVCC.
 
 ### Build from Source
 Clone the repository and compile the project using CMake.
 ```bash
 git clone https://github.com/Lhongpei/PDHCG-II.git
 cd PDHCG-II
-cmake -B build
+cmake -S . -B build
 cmake --build build --clean-first
 ```
 This will create the solver binary at `./build/bin/pdhcg`.
 
+If your system has multiple CUDA versions or the default nvcc is outdated (e.g., in `/usr/bin/nvcc`), you should explicitly specify the path to your modern CUDA compiler using the CUDACXX environment variable.
+```bash
+git clone https://github.com/Lhongpei/PDHCG-II.git
+cd PDHCG-II
+# Replace '/your/path/to/nvcc' with the actual path, e.g., /usr/local/cuda-12.6/bin/nvcc
+CUDACXX=/your/path/to/nvcc cmake -S . -B build
+cmake --build build --clean-first
+```
 
 ##  Usage (C++ Executable)
 

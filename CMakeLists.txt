@@ -1,16 +1,13 @@
 # -----------------------------------------------------------------------------
 # ROOT CMakeLists.txt for PDHCG (Unified Build System)
 # -----------------------------------------------------------------------------
-cmake_minimum_required(VERSION 3.20)
-set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.6/bin/nvcc" CACHE FILEPATH "CUDA Compiler" FORCE)
-# Project config
-
+cmake_minimum_required(VERSION 3.24)
 
 project(pdhcg LANGUAGES C CXX CUDA)
 
 set(PDHCG_VERSION_MAJOR 0)
 set(PDHCG_VERSION_MINOR 1)
-set(PDHCG_VERSION_PATCH 1)
+set(PDHCG_VERSION_PATCH 2)
 
 set(PDHCG_VERSION "${PDHCG_VERSION_MAJOR}.${PDHCG_VERSION_MINOR}.${PDHCG_VERSION_PATCH}")
 add_compile_definitions(PDHCG_VERSION="${PDHCG_VERSION}")
