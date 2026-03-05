@@ -20,6 +20,7 @@ __all__ = ["Model"]
 
 # versioning
 from importlib.metadata import version, PackageNotFoundError
+
 # get version from package metadata (toml file)
 try:
     __version__ = version("pdhcg")

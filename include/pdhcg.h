@@ -20,12 +20,11 @@ limitations under the License.
 #include "pdhcg_types.h"
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-    // create an qp_problem_t from a matrix descriptor
-    qp_problem_t *create_qp_problem(const double *objective_c,
+// create an qp_problem_t from a matrix descriptor
+qp_problem_t *create_qp_problem(const double *objective_c,
                                 const matrix_desc_t *Q_desc,
                                 const matrix_desc_t *R_desc,
                                 const matrix_desc_t *A_desc,
@@ -33,20 +32,20 @@ extern "C"
                                 const double *var_lb, const double *var_ub,
                                 const double *objective_constant);
 
-    // Set up initial primal and dual solution for an qp_problem_t
-    void set_start_values(qp_problem_t *prob, const double *primal, const double *dual);
+// Set up initial primal and dual solution for an qp_problem_t
+void set_start_values(qp_problem_t *prob, const double *primal,
+                      const double *dual);
 
-    // solve the LP problem using PDHG
-    pdhcg_result_t *solve_qp_problem(
-        const qp_problem_t *prob,
-        const pdhg_parameters_t *params);
+// solve the LP problem using PDHG
+pdhcg_result_t *solve_qp_problem(const qp_problem_t *prob,
+                                 const pdhg_parameters_t *params);
 
-    // parameter
-    void set_default_parameters(pdhg_parameters_t *params);
+// parameter
+void set_default_parameters(pdhg_parameters_t *params);
 
-    void pdhcg_result_free(pdhcg_result_t *results);
+void pdhcg_result_free(pdhcg_result_t *results);
 
-    void qp_problem_free(qp_problem_t *prob);
+void qp_problem_free(qp_problem_t *prob);
 
 #ifdef __cplusplus
 } // extern "C"

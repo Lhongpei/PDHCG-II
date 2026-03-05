@@ -26,6 +26,7 @@ from . import PDHCG
 # array-like type
 ArrayLike = Union[np.ndarray, list, tuple]
 
+
 def _as_dense_f64_c(a: ArrayLike) -> np.ndarray:
     """
     Convert input to a C-contiguous numpy array of float64.
@@ -35,6 +36,7 @@ def _as_dense_f64_c(a: ArrayLike) -> np.ndarray:
     if not arr.flags.c_contiguous:
         arr = np.ascontiguousarray(arr, dtype=np.float64)
     return arr
+
 
 def _as_csr_f64_i32(A: sp.spmatrix) -> sp.csr_matrix:
     """
@@ -54,6 +56,7 @@ class _ParamsView:
     """
     A view of the model parameters that allows getting/setting via attributes or keys.
     """
+
     def __init__(self, model: "Model"):
         object.__setattr__(self, "_m", model)
 
@@ -80,14 +83,15 @@ class Model:
     """
     A class representing a linear programming model.
     """
+
     def __init__(
-self,
+        self,
         objective_vector: ArrayLike,
         constraint_matrix: Optional[Union[np.ndarray, sp.spmatrix]] = None,
         constraint_lower_bound: Optional[ArrayLike] = None,
         constraint_upper_bound: Optional[ArrayLike] = None,
-        objective_matrix: Optional[Union[np.ndarray, sp.spmatrix]] = None, 
-        objective_matrix_low_rank: Optional[Union[np.ndarray, sp.spmatrix]] = None, 
+        objective_matrix: Optional[Union[np.ndarray, sp.spmatrix]] = None,
+        objective_matrix_low_rank: Optional[Union[np.ndarray, sp.spmatrix]] = None,
         variable_lower_bound: Optional[ArrayLike] = None,
         variable_upper_bound: Optional[ArrayLike] = None,
         objective_constant: float = 0.0,
@@ -104,7 +108,7 @@ self,
         - constraint_upper_bounds: Upper bounds for the constraints.
         - objective_constant: Constant term in the objective function.
         - model_sense: PDHCG.MINIMIZE or PDHCG.MAXIMIZE.
-        If variable bounds are not provided, they default to -inf and +inf respectively.    
+        If variable bounds are not provided, they default to -inf and +inf respectively.
         """
         # problem dimensions
         self.num_vars = 0
@@ -112,32 +116,56 @@ self,
 
         # Check A
         if constraint_matrix is not None:
-             if not hasattr(constraint_matrix, "shape") or len(constraint_matrix.shape) != 2:
-                raise ValueError("constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
-             m, n = constraint_matrix.shape
-             self.num_vars = int(n)
-             self.num_constrs = int(m)
-        
+            if (
+                not hasattr(constraint_matrix, "shape")
+                or len(constraint_matrix.shape) != 2
+            ):
+                raise ValueError(
+                    "constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
+                )
+            m, n = constraint_matrix.shape
+            self.num_vars = int(n)
+            self.num_constrs = int(m)
+
         # Check Q (if A was None, try to infer n from Q)
         if objective_matrix is not None:
-            if not hasattr(objective_matrix, "shape") or len(objective_matrix.shape) != 2:
-                raise ValueError("objective_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
+            if (
+                not hasattr(objective_matrix, "shape")
+                or len(objective_matrix.shape) != 2
+            ):
+                raise ValueError(
+                    "objective_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
+                )
             if self.num_vars == 0:
                 self.num_vars = int(objective_matrix.shape[1])
             elif objective_matrix.shape[1] != self.num_vars:
-                raise ValueError(f"objective_matrix dimensions mismatch variables ({self.num_vars})")
+                raise ValueError(
+                    f"objective_matrix dimensions mismatch variables ({self.num_vars})"
+                )
 
         # Check R (if A and Q were None, try to infer n from R)
         if objective_matrix_low_rank is not None:
-            if not hasattr(objective_matrix_low_rank, "shape") or len(objective_matrix_low_rank.shape) != 2:
-                 raise ValueError("objective_matrix_low_rank must be a 2D numpy.ndarray or scipy.sparse matrix.")
+            if (
+                not hasattr(objective_matrix_low_rank, "shape")
+                or len(objective_matrix_low_rank.shape) != 2
+            ):
+                raise ValueError(
+                    "objective_matrix_low_rank must be a 2D numpy.ndarray or scipy.sparse matrix."
+                )
             if self.num_vars == 0:
                 self.num_vars = int(objective_matrix_low_rank.shape[1])
             elif objective_matrix_low_rank.shape[1] != self.num_vars:
-                raise ValueError(f"objective_matrix_low_rank dimensions mismatch variables ({self.num_vars})")
+                raise ValueError(
+                    f"objective_matrix_low_rank dimensions mismatch variables ({self.num_vars})"
+                )
 
-        if self.num_vars == 0 and constraint_matrix is None and objective_matrix is None and objective_matrix_low_rank is None:
-             return None
+        if (
+            self.num_vars == 0
+            and constraint_matrix is None
+            and objective_matrix is None
+            and objective_matrix_low_rank is None
+        ):
+            return None
 
         # sense
         self.ModelSense = PDHCG.MINIMIZE
@@ -155,26 +183,26 @@ self,
         self.setVariableLowerBound(variable_lower_bound)
         self.setVariableUpperBound(variable_upper_bound)
         # initialize warm start values
-        self._primal_start: Optional[np.ndarray] = None # warm start primal solution
-        self._dual_start: Optional[np.ndarray] = None # warm start dual solution
+        self._primal_start: Optional[np.ndarray] = None  # warm start primal solution
+        self._dual_start: Optional[np.ndarray] = None  # warm start dual solution
         # initialize solution attributes
-        self._x: Optional[np.ndarray] = None # primal solution
-        self._y: Optional[np.ndarray] = None # dual solution
-        self._objval: Optional[float] = None # objective value
-        self._dualobj: Optional[float] = None # dual objective value
-        self._gap: Optional[float] = None # primal-dual gap
-        self._rel_gap: Optional[float] = None # relative gap
-        self._status: Optional[str] = None # solution status
-        self._status_code: Optional[int] = None # solution status code
-        self._iter: Optional[int] = None # number of iterations
-        self._runtime: Optional[float] = None # runtime
-        self._rescale_time: Optional[float] = None # rescale time
-        self._rel_p_res: Optional[float] = None # relative primal residual
-        self._rel_d_res: Optional[float] = None # relative dual residual
-        self._max_p_ray: Optional[float] = None # maximum primal ray
-        self._max_d_ray: Optional[float] = None # maximum dual ray
-        self._p_ray_lin_obj: Optional[float] = None # primal ray linear objective
-        self._d_ray_obj: Optional[float] = None # dual ray objective
+        self._x: Optional[np.ndarray] = None  # primal solution
+        self._y: Optional[np.ndarray] = None  # dual solution
+        self._objval: Optional[float] = None  # objective value
+        self._dualobj: Optional[float] = None  # dual objective value
+        self._gap: Optional[float] = None  # primal-dual gap
+        self._rel_gap: Optional[float] = None  # relative gap
+        self._status: Optional[str] = None  # solution status
+        self._status_code: Optional[int] = None  # solution status code
+        self._iter: Optional[int] = None  # number of iterations
+        self._runtime: Optional[float] = None  # runtime
+        self._rescale_time: Optional[float] = None  # rescale time
+        self._rel_p_res: Optional[float] = None  # relative primal residual
+        self._rel_d_res: Optional[float] = None  # relative dual residual
+        self._max_p_ray: Optional[float] = None  # maximum primal ray
+        self._max_d_ray: Optional[float] = None  # maximum dual ray
+        self._p_ray_lin_obj: Optional[float] = None  # primal ray linear objective
+        self._d_ray_obj: Optional[float] = None  # dual ray objective
 
     def setObjectiveVector(self, c: ArrayLike) -> None:
         """
@@ -184,9 +212,13 @@ self,
         self.c = _as_dense_f64_c(c)
         # check dimensions
         if self.c.ndim != 1:
-            raise ValueError(f"setObjectiveVector: c must be 1D, got shape {self.c.shape}")
+            raise ValueError(
+                f"setObjectiveVector: c must be 1D, got shape {self.c.shape}"
+            )
         if self.c.size != self.num_vars:
-            raise ValueError(f"setObjectiveVector: length {self.c.size} != self.num_vars ({self.num_vars})")
+            raise ValueError(
+                f"setObjectiveVector: length {self.c.size} != self.num_vars ({self.num_vars})"
+            )
         # clear cached solution
         self._clear_solution_cache()
 
@@ -208,11 +240,17 @@ self,
             self._clear_solution_cache()
             return
         if not isinstance(Q_like, (np.ndarray, sp.spmatrix)):
-            raise TypeError("setConstraintMatrix: Q must be a numpy.ndarray or scipy.sparse matrix")
+            raise TypeError(
+                "setConstraintMatrix: Q must be a numpy.ndarray or scipy.sparse matrix"
+            )
         if len(Q_like.shape) != 2:
-            raise ValueError(f"setConstraintMatrix: Q must be 2D, got shape {Q_like.shape}")
+            raise ValueError(
+                f"setConstraintMatrix: Q must be 2D, got shape {Q_like.shape}"
+            )
         if Q_like.shape[1] != self.num_vars:
-            raise ValueError(f"setConstraintMatrix: Q shape {Q_like.shape} does not match number of variables ({self.num_vars})")
+            raise ValueError(
+                f"setConstraintMatrix: Q shape {Q_like.shape} does not match number of variables ({self.num_vars})"
+            )
         # store as float64
         if sp.issparse(Q_like):
             self.Q = _as_csr_f64_i32(Q_like)
@@ -220,8 +258,10 @@ self,
             self.Q = _as_dense_f64_c(Q_like)
         # problem dimensions
         if not hasattr(self.Q, "shape") or len(self.Q.shape) != 2:
-            raise ValueError("constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
-        
+            raise ValueError(
+                "constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
+            )
+
     def setObjectiveMatrixLowRank(self, R_like: ArrayLike) -> None:
         """
         Overwrite low-rank objective matrix R.
@@ -232,19 +272,25 @@ self,
             return
 
         if not isinstance(R_like, (np.ndarray, sp.spmatrix)):
-            raise TypeError("setObjectiveMatrixLowRank: R must be a numpy.ndarray or scipy.sparse matrix")
+            raise TypeError(
+                "setObjectiveMatrixLowRank: R must be a numpy.ndarray or scipy.sparse matrix"
+            )
         if len(R_like.shape) != 2:
-            raise ValueError(f"setObjectiveMatrixLowRank: R must be 2D, got shape {R_like.shape}")
+            raise ValueError(
+                f"setObjectiveMatrixLowRank: R must be 2D, got shape {R_like.shape}"
+            )
         if R_like.shape[1] != self.num_vars:
-            raise ValueError(f"setObjectiveMatrixLowRank: R columns {R_like.shape[1]} must match variables ({self.num_vars})")
-        
+            raise ValueError(
+                f"setObjectiveMatrixLowRank: R columns {R_like.shape[1]} must match variables ({self.num_vars})"
+            )
+
         if sp.issparse(R_like):
             self.R = _as_csr_f64_i32(R_like)
         else:
             self.R = _as_dense_f64_c(R_like)
-        
+
         self._clear_solution_cache()
-    
+
     def setConstraintMatrix(self, A_like: ArrayLike) -> None:
         """
         Overwrite constraint matrix A.
@@ -257,11 +303,17 @@ self,
             self._clear_solution_cache()
             return
         if not isinstance(A_like, (np.ndarray, sp.spmatrix)):
-            raise TypeError("setConstraintMatrix: A must be a numpy.ndarray or scipy.sparse matrix")
+            raise TypeError(
+                "setConstraintMatrix: A must be a numpy.ndarray or scipy.sparse matrix"
+            )
         if len(A_like.shape) != 2:
-            raise ValueError(f"setConstraintMatrix: A must be 2D, got shape {A_like.shape}")
+            raise ValueError(
+                f"setConstraintMatrix: A must be 2D, got shape {A_like.shape}"
+            )
         if A_like.shape[1] != self.num_vars:
-            raise ValueError(f"setConstraintMatrix: A shape {A_like.shape} does not match number of variables ({self.num_vars})")
+            raise ValueError(
+                f"setConstraintMatrix: A shape {A_like.shape} does not match number of variables ({self.num_vars})"
+            )
         # store as float64
         if sp.issparse(A_like):
             self.A = _as_csr_f64_i32(A_like)
@@ -269,7 +321,9 @@ self,
             self.A = _as_dense_f64_c(A_like)
         # problem dimensions
         if not hasattr(self.A, "shape") or len(self.A.shape) != 2:
-            raise ValueError("constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
+            raise ValueError(
+                "constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
+            )
         m, _ = self.A.shape
         self.num_constrs = int(m)
         # check constraint bounds
@@ -288,7 +342,7 @@ self,
                 raise ValueError(
                     f"setConstraintMatrix: constraint_upper_bound length {u.size} != rows {self.num_constrs}. "
                     f"Call setConstraintUpperBound(...) to update it."
-               )
+                )
         # clear cached solution
         self._clear_solution_cache()
 
@@ -372,7 +426,9 @@ self,
         # clear cached solution
         self._clear_solution_cache()
 
-    def setWarmStart(self, primal: Optional[ArrayLike] = None, dual: Optional[ArrayLike] = None) -> None:
+    def setWarmStart(
+        self, primal: Optional[ArrayLike] = None, dual: Optional[ArrayLike] = None
+    ) -> None:
         """
         Set warm start values for primal and/or dual solutions.
         """
@@ -384,20 +440,20 @@ self,
             else:
                 warnings.warn(
                     f"Warm start primal size mismatch (expected {self.num_vars}, got {primal_arr.size}).",
-                    RuntimeWarning
+                    RuntimeWarning,
                 )
         # clear primal warm start
         else:
             self._primal_start = None
         # set dual warm start
         if dual is not None:
-            dual_arr = _as_dense_f64_c(dual).ravel()          
+            dual_arr = _as_dense_f64_c(dual).ravel()
             if dual_arr.size == self.num_constrs:  # otherwise default to None
                 self._dual_start = dual_arr
             else:
                 warnings.warn(
                     f"Warm start dual size mismatch (expected {self.num_constrs}, got {dual_arr.size}).",
-                    RuntimeWarning
+                    RuntimeWarning,
                 )
         # clear dual warm start
         else:
@@ -425,7 +481,7 @@ self,
 
     def setParams(self, /, **kwargs) -> None:
         """
-        Set multiple solver parameters by name. 
+        Set multiple solver parameters by name.
         """
         for k, v in kwargs.items():
             self.setParam(k, v)
@@ -442,7 +498,7 @@ self,
         # determine sign
         sign = 1 if self.ModelSense == PDHCG.MINIMIZE else -1
         # effective objective based on sense
-        c_eff  = sign * self.c if self.c is not None else None
+        c_eff = sign * self.c if self.c is not None else None
         c0_eff = sign * self.c0 if self.c0 is not None else None
         # call the core solver
         info = solve_once(
@@ -458,22 +514,28 @@ self,
             zero_tolerance=0.0,
             params=self._params,
             primal_start=self._primal_start,
-            dual_start=self._dual_start
+            dual_start=self._dual_start,
         )
         # solutions
         self._x = np.asarray(info.get("X")) if info.get("X") is not None else None
         self._y = np.asarray(info.get("Pi")) if info.get("Pi") is not None else None
         # objectives & gaps
         primal_obj_eff = info.get("PrimalObj")
-        dual_obj_eff   = info.get("DualObj")
+        dual_obj_eff = info.get("DualObj")
         self._objval = sign * primal_obj_eff if primal_obj_eff is not None else None
         self._dualobj = sign * dual_obj_eff if dual_obj_eff is not None else None
         self._gap = info.get("ObjectiveGap")
         self._rel_gap = info.get("RelativeObjectiveGap")
         # status & counters
-        self._status = str(info.get("Status")) if info.get("Status") is not None else None
-        self._status_code = int(info.get("StatusCode")) if info.get("StatusCode") is not None else None
-        self._iter = int(info.get("Iterations")) if info.get("Iterations") is not None else None
+        self._status = (
+            str(info.get("Status")) if info.get("Status") is not None else None
+        )
+        self._status_code = (
+            int(info.get("StatusCode")) if info.get("StatusCode") is not None else None
+        )
+        self._iter = (
+            int(info.get("Iterations")) if info.get("Iterations") is not None else None
+        )
         self._runtime = info.get("RuntimeSec")
         self._rescale_time = info.get("RescalingTimeSec")
         # residuals
@@ -482,9 +544,11 @@ self,
         # rays
         self._max_p_ray = info.get("MaxPrimalRayInfeas")
         self._max_d_ray = info.get("MaxDualRayInfeas")
-        p_ray_lin_eff  = info.get("PrimalRayLinObj")
-        d_ray_obj_eff  = info.get("DualRayObj")
-        self._p_ray_lin_obj = sign * p_ray_lin_eff if p_ray_lin_eff is not None else None
+        p_ray_lin_eff = info.get("PrimalRayLinObj")
+        d_ray_obj_eff = info.get("DualRayObj")
+        self._p_ray_lin_obj = (
+            sign * p_ray_lin_eff if p_ray_lin_eff is not None else None
+        )
         self._d_ray_obj = sign * d_ray_obj_eff if d_ray_obj_eff is not None else None
 
     def _clear_solution_cache(self) -> None:
@@ -526,7 +590,7 @@ self,
     @property
     def RelGap(self) -> Optional[float]:
         return self._rel_gap
-    
+
     @property
     def Status(self) -> Optional[str]:
         return self._status

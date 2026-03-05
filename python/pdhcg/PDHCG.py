@@ -13,17 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Objective 
+# Objective
 MINIMIZE = 1
 MAXIMIZE = -1
 
 # Status codes
-OPTIMAL           = 0
+OPTIMAL = 0
 PRIMAL_INFEASIBLE = 1
-DUAL_INFEASIBLE   = 2
-TIME_LIMIT        = 3
-ITERATION_LIMIT   = 4
-UNSPECIFIED       = -1
+DUAL_INFEASIBLE = 2
+TIME_LIMIT = 3
+ITERATION_LIMIT = 4
+UNSPECIFIED = -1
 
 
 # parameter name alias
