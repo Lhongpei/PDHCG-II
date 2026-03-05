@@ -70,7 +70,7 @@ Solver Parameters:
 | Option | Type | Description | Default |
 | :--- | :--- | :--- | :--- |
 | -h, --help | flag | Display the help message. | N/A |
-| -v, --verbose | flag | Enable verbose logging. | false |
+| -v, --verbose | int | Verbosity level: 0 (Silent), 1 (Summary), 2 (Detailed). | 1 |
 | --time_limit | double | Time limit in seconds. | 3600.0 |
 | --iter_limit | int | Iteration limit. | 2147483647 |
 | --eps_opt | double | Relative optimality tolerance. | 1e-4 |
@@ -145,6 +145,9 @@ m = Model(objective_matrix=Q,
           constraint_upper_bound=u,
           variable_lower_bound=lb,
           variable_upper_bound=ub)
+
+# 5. Set solver parameters (0=Silent, 1=Summary, 2=Detailed)
+m.setParams(LogLevel=2)
 
 # Solve
 m.optimize()
