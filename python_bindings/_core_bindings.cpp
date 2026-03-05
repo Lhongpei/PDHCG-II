@@ -299,7 +299,7 @@ static void parse_params_from_python(py::object params_obj, pdhg_parameters_t *p
     };
 
     // verbosity
-    getb("verbose", p->verbose);
+    geti("verbose", p->verbose);
     geti("termination_evaluation_frequency", p->termination_evaluation_frequency);
 
     // tolerances

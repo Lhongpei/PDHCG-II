@@ -472,7 +472,7 @@ void set_default_parameters(pdhg_parameters_t *params) {
   params->has_pock_chambolle_alpha = true;
   params->pock_chambolle_alpha = 1.0;
   params->bound_objective_rescaling = true;
-  params->verbose = false;
+  params->verbose = 1;
   params->termination_evaluation_frequency = 200;
   params->feasibility_polishing = false;
   params->reflection_coefficient = 1.0;
@@ -523,7 +523,7 @@ void print_initial_info(const pdhg_parameters_t *params,
                         const qp_problem_t *problem) {
   pdhg_parameters_t default_params;
   set_default_parameters(&default_params);
-  if (!params->verbose) {
+  if (params->verbose < 2) {
     return;
   }
   printf("---------------------------------------------------------------------"
@@ -596,10 +596,11 @@ void print_initial_info(const pdhg_parameters_t *params,
 
 void pdhg_final_log(const pdhcg_result_t *result,
                     const pdhg_parameters_t *params) {
-  if (params->verbose) {
+  if (params->verbose >= 2) {
     printf("-------------------------------------------------------------------"
            "--------------------\n");
   }
+  if (params->verbose < 1) return;
   printf("Solution Summary\n");
   printf("  Status             : %s\n",
          termination_reason_to_string(result->termination_reason));
@@ -612,8 +613,8 @@ void pdhg_final_log(const pdhcg_result_t *result,
   printf("  Dual infeas        : %.3e\n", result->relative_dual_residual);
 }
 
-void display_iteration_stats(const pdhg_solver_state_t *state, bool verbose) {
-  if (!verbose) {
+void display_iteration_stats(const pdhg_solver_state_t *state, int verbose) {
+  if (verbose < 2) {
     return;
   }
   if (state->total_count % get_print_frequency(state->total_count) == 0) {
@@ -1320,7 +1321,7 @@ void check_feas_polishing_termination_criteria(
 
 void print_initial_feas_polish_info(bool is_primal_polish,
                                     const pdhg_parameters_t *params) {
-  if (!params->verbose) {
+  if (params->verbose < 2) {
     return;
   }
   printf("---------------------------------------------------------------------"
@@ -1343,11 +1344,12 @@ void print_initial_feas_polish_info(bool is_primal_polish,
 
 void pdhg_feas_polish_final_log(const pdhg_solver_state_t *primal_state,
                                 const pdhg_solver_state_t *dual_state,
-                                bool verbose) {
-  if (verbose) {
+                                int verbose) {
+  if (verbose >= 1) {
     printf("-------------------------------------------------------------------"
            "--------------------\n");
   }
+  if (verbose < 1) return;
   printf("Feasibility Polishing Summary\n");
   printf("  Primal Status        : %s\n",
          termination_reason_to_string(primal_state->termination_reason));
@@ -1370,8 +1372,8 @@ void pdhg_feas_polish_final_log(const pdhg_solver_state_t *primal_state,
 }
 
 void display_feas_polish_iteration_stats(const pdhg_solver_state_t *state,
-                                         bool verbose, bool is_primal_polish) {
-  if (!verbose) {
+                                         int verbose, bool is_primal_polish) {
+  if (verbose < 2) {
     return;
   }
   if (state->total_count % get_print_frequency(state->total_count) == 0) {

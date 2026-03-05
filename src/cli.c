@@ -137,8 +137,8 @@ void print_usage(const char *prog_name) {
   fprintf(stderr, "Options:\n");
   fprintf(stderr,
           "  -h, --help                          Display this help message.\n");
-  fprintf(stderr, "  -v, --verbose                       "
-                  "Enable verbose logging (default: false).\n");
+  fprintf(stderr, "  -v, --verbose <int>                 "
+                  "Verbosity level: 0=silent, 1=summary, 2=detailed (default: 1).\n");
   fprintf(stderr, "      --time_limit <seconds>          "
                   "Time limit in seconds (default: 3600.0).\n");
   fprintf(
@@ -183,7 +183,7 @@ int run_pdhcg(int argc, char *argv[]) {
 
   static struct option long_options[] = {
       {"help", no_argument, 0, 'h'},
-      {"verbose", no_argument, 0, 'v'},
+      {"verbose", required_argument, 0, 'v'},
       {"time_limit", required_argument, 0, 1001},
       {"iter_limit", required_argument, 0, 1002},
       {"eps_opt", required_argument, 0, 1003},
@@ -202,13 +202,13 @@ int run_pdhcg(int argc, char *argv[]) {
       {0, 0, 0, 0}};
 
   int opt;
-  while ((opt = getopt_long(argc, argv, "hvfp", long_options, NULL)) != -1) {
+  while ((opt = getopt_long(argc, argv, "hv:fp", long_options, NULL)) != -1) {
     switch (opt) {
     case 'h':
       print_usage(argv[0]);
       return 0;
     case 'v':
-      params.verbose = true;
+      params.verbose = atoi(optarg);
       break;
     case 1001: // --time_limit
       params.termination_criteria.time_sec_limit = atof(optarg);

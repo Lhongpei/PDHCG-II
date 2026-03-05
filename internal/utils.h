@@ -123,7 +123,7 @@ void pdhg_final_log(const pdhcg_result_t *result,
                     const pdhg_parameters_t *params);
 
 void display_iteration_stats(const pdhg_solver_state_t *solver_state,
-                             bool verbose);
+                             int verbose);
 
 const char *termination_reason_to_string(termination_reason_t reason);
 const char *problem_type_to_string(problem_type_t type);
@@ -154,11 +154,11 @@ void print_initial_feas_polish_info(bool is_primal_polish,
                                     const pdhg_parameters_t *params);
 
 void display_feas_polish_iteration_stats(const pdhg_solver_state_t *state,
-                                         bool verbose, bool is_primal_polish);
+                                         int verbose, bool is_primal_polish);
 
 void pdhg_feas_polish_final_log(const pdhg_solver_state_t *primal_state,
                                 const pdhg_solver_state_t *dual_state,
-                                bool verbose);
+                                int verbose);
 
 void compute_primal_feas_polish_residual(pdhg_solver_state_t *state,
                                          const pdhg_solver_state_t *ori_state,

@@ -801,7 +801,7 @@ initialize_solver_state(const pdhg_parameters_t *params,
                         cudaMemcpyHostToDevice));
   decide_problem_type(state);
   free(ones_dual_h);
-  if (params->verbose) {
+  if (params->verbose >= 2) {
     printf(
         "---------------------------------------------------------------------"
         "------------------\n");

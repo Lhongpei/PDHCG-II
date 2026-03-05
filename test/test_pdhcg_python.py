@@ -8,7 +8,6 @@ import os
 try:
     import pdhcg
 except ImportError:
-    # Assuming the script is in PDHCGv2-C/test/ and python package is in PDHCGv2-C/python/
     sys.path.append(
         os.path.abspath(os.path.join(os.path.dirname(__file__), "../python"))
     )
@@ -23,9 +22,8 @@ from pdhcg import Model
 
 class TestPDHCGInterface(unittest.TestCase):
     def setUp(self):
-        # Suppress output for cleaner test logs
         self.default_params = {
-            "OutputFlag": True,
+            "LogLevel": 0,
             "OptimalityTol": 1e-6,
             "FeasibilityTol": 1e-6,
         }

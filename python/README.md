@@ -86,7 +86,7 @@ m.ModelSense = PDHCG.MINIMIZE
 # Parameters can be set in multiple ways
 m.Params.TimeLimit = 60        # attribute style
 m.setParam("FeasibilityTol", 1e-6)
-m.setParams(OutputFlag=True, OptimalityTol=1e-8)
+m.setParams(LogLevel=2, OptimalityTol=1e-8)
 
 # Solve
 m.optimize()
@@ -164,7 +164,7 @@ Below is a list of commonly used parameters, their internal keys, and descriptio
 |---|---|---|---|---|
 | `TimeLimit` | `time_sec_limit` | float | `3600.0` | Maximum wall-clock time in seconds. The solver terminates if the limit is reached. |
 | `IterationLimit` | `iteration_limit` | int | `2147483647` | Maximum number of iterations. |
-| `OutputFlag`, `LogToConsole` | `verbose` | bool | `False` | Enable (`True`) or disable (`False`) console logging output. |
+| `LogLevel`, `Verbosity` | `verbose` | int | `1` | Verbosity level: `0` (Silent), `1` (Summary), or `2` (Detailed iteration info). |
 | `TermCheckFreq` | `termination_evaluation_frequency` | int | `200` | Frequency (in iterations) at which termination conditions are evaluated. |
 | `OptimalityNorm` | `optimality_norm` | string | `"l2"` | Norm for optimality criteria. Use `"l2"` for L2 norm or `"linf"` for infinity norm. |
 | `OptimalityTol` | `eps_optimal_relative` | float | `1e-4` | Relative tolerance for optimality gap. Solver stops if the relative primal-dual gap ≤ this value. |

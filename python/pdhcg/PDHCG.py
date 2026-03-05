@@ -31,6 +31,8 @@ _PARAM_ALIAS = {
     # limits / logging
     "TimeLimit": "time_sec_limit",
     "IterationLimit": "iteration_limit",
+    "LogLevel": "verbose",
+    "Verbosity": "verbose",
     "OutputFlag": "verbose",
     "LogToConsole": "verbose",
     # termination evaluation cadence
