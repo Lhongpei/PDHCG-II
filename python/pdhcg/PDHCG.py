@@ -60,4 +60,8 @@ _PARAM_ALIAS = {
     # singular value estimation (power method)
     "SVMaxIter": "sv_max_iter",
     "SVTol": "sv_tol",
+    # inner solver
+    "InnerIterLimit": "inner_iter_limit",
+    "InnerInitTol": "inner_init_tol",
+    "InnerMinTol": "inner_min_tol",
 }

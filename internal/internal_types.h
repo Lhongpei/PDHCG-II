@@ -63,10 +63,12 @@ typedef struct {
   double *primal_buffer;
   double *dual_buffer;
   double tol;
+  double min_tol;
   int iteration_limit;
   int total_count;
   int has_inner_loop;
 } inner_solver_t;
+
 typedef enum { LP, CONVEX_QP, NONCONVEX_QP, CONVEX_QCQP } problem_type_t;
 
 typedef struct {

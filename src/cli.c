@@ -137,8 +137,9 @@ void print_usage(const char *prog_name) {
   fprintf(stderr, "Options:\n");
   fprintf(stderr,
           "  -h, --help                          Display this help message.\n");
-  fprintf(stderr, "  -v, --verbose <int>                 "
-                  "Verbosity level: 0=silent, 1=summary, 2=detailed (default: 1).\n");
+  fprintf(stderr,
+          "  -v, --verbose <int>                 "
+          "Verbosity level: 0=silent, 1=summary, 2=detailed (default: 1).\n");
   fprintf(stderr, "      --time_limit <seconds>          "
                   "Time limit in seconds (default: 3600.0).\n");
   fprintf(
@@ -166,15 +167,15 @@ void print_usage(const char *prog_name) {
           "Max iterations for singular value estimation (default: 5000).\n");
   fprintf(stderr, "      --sv_tol <float>                "
                   "Tolerance for singular value estimation (default: 1e-4).\n");
-  // fprintf(stderr, "  -f  --feasibility_polishing         "
-  //                 "Enable feasibility use feasibility polishing (default:
-  //                 false).\n");
-  // fprintf(stderr, "      --eps_feas_polish <tolerance>   Relative feasibility
-  // "
-  //                 "polish tolerance (default: 1e-6).\n");
   fprintf(stderr,
           "      --opt_norm <norm_type>          "
           "Norm for optimality criteria: l2 or linf (default: linf).\n");
+  fprintf(stderr, "      --inner_iter_limit <int>        "
+                  "Max iterations for the inner solver (default: 1000).\n");
+  fprintf(stderr, "      --inner_init_tol <float>        "
+                  "Initial tolerance for the inner solver (default: 1e-3).\n");
+  fprintf(stderr, "      --inner_min_tol <float>         "
+                  "Minimum tolerance for the inner solver (default: 1e-9).\n");
 }
 
 int run_pdhcg(int argc, char *argv[]) {
@@ -199,6 +200,9 @@ int run_pdhcg(int argc, char *argv[]) {
       {"sv_tol", required_argument, 0, 1012},
       {"eval_freq", required_argument, 0, 1013},
       {"opt_norm", required_argument, 0, 1014},
+      {"inner_iter_limit", required_argument, 0, 1015},
+      {"inner_init_tol", required_argument, 0, 1016},
+      {"inner_min_tol", required_argument, 0, 1017},
       {0, 0, 0, 0}};
 
   int opt;
@@ -264,6 +268,15 @@ int run_pdhcg(int argc, char *argv[]) {
         return 1;
       }
     } break;
+    case 1015: // --inner_iter_limit
+      params.inner_solver_parameters.iteration_limit = atoi(optarg);
+      break;
+    case 1016: // --inner_init_tol
+      params.inner_solver_parameters.initial_tolerance = atof(optarg);
+      break;
+    case 1017: // --inner_min_tol
+      params.inner_solver_parameters.min_tolerance = atof(optarg);
+      break;
     case '?': // Unknown option
       return 1;
     }

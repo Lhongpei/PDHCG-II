@@ -304,10 +304,36 @@ static void initialize_quadratic_obj_term(pdhg_solver_state_t *state,
   }
 }
 
-static void initialize_inner_solver(pdhg_solver_state_t *state) {
+static void initialize_inner_solver(pdhg_solver_state_t *state,
+                                    const pdhg_parameters_t *params) {
   state->inner_solver =
       (inner_solver_t *)safe_calloc(1, sizeof(inner_solver_t));
   state->inner_solver->has_inner_loop = false;
+
+  int iteration_limit = params->inner_solver_parameters.iteration_limit;
+  double initial_tol = params->inner_solver_parameters.initial_tolerance;
+  double min_tol = params->inner_solver_parameters.min_tolerance;
+
+  if (iteration_limit < 1) {
+    fprintf(stderr, "Warning: inner_iter_limit (%d) < 1. Resetting to 1.\n",
+            iteration_limit);
+    iteration_limit = 1;
+  }
+
+  if (initial_tol <= 0.0) {
+    fprintf(stderr,
+            "Warning: inner_init_tol (%.1e) <= 0. Resetting to default 1e-3.\n",
+            initial_tol);
+    initial_tol = 1e-3;
+  }
+
+  if (min_tol <= 0.0) {
+    fprintf(stderr,
+            "Warning: inner_min_tol (%.1e) <= 0. Resetting to default 1e-9.\n",
+            min_tol);
+    min_tol = 1e-9;
+  }
+
   if (!(state->quadratic_objective_term->quad_obj_type == PDHCG_NON_Q ||
         state->quadratic_objective_term->quad_obj_type == PDHCG_DIAG_Q)) {
     ALLOC_ZERO(state->inner_solver->primal_buffer,
@@ -315,6 +341,7 @@ static void initialize_inner_solver(pdhg_solver_state_t *state) {
     ALLOC_ZERO(state->inner_solver->dual_buffer,
                state->num_constraints * sizeof(double));
   }
+
   switch (state->quadratic_objective_term->quad_obj_type) {
   case PDHCG_NON_Q:
     break;
@@ -330,8 +357,10 @@ static void initialize_inner_solver(pdhg_solver_state_t *state) {
                state->num_variables * sizeof(double));
     ALLOC_ZERO(state->inner_solver->bb_step_size->direction,
                state->num_variables * sizeof(double));
-    state->inner_solver->iteration_limit = 1000;
-    state->inner_solver->tol = 1e-3;
+
+    state->inner_solver->iteration_limit = iteration_limit;
+    state->inner_solver->tol = initial_tol;
+    state->inner_solver->min_tol = min_tol;
     break;
   default:
     fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
@@ -776,7 +805,7 @@ initialize_solver_state(const pdhg_parameters_t *params,
 
   initialize_quadratic_obj_term(state, rescale_info->scaled_problem);
   initialize_quadratic_term_information(state, params);
-  initialize_inner_solver(state);
+  initialize_inner_solver(state, params);
 
   CUDA_CHECK(
       cudaMalloc(&state->ones_primal_d, state->num_variables * sizeof(double)));
@@ -802,9 +831,9 @@ initialize_solver_state(const pdhg_parameters_t *params,
   decide_problem_type(state);
   free(ones_dual_h);
   if (params->verbose >= 2) {
-    printf(
-        "---------------------------------------------------------------------"
-        "------------------\n");
+    printf("-------------------------------------------------------------------"
+           "----------"
+           "----------------------\n");
     printf("Problem Type: %s\n", problem_type_to_string(state->problem_type));
     printf("Quadratic Objective Matrix Type: %s\n",
            quad_obj_type_to_string(
@@ -812,20 +841,21 @@ initialize_solver_state(const pdhg_parameters_t *params,
     if (state->quadratic_objective_term->quad_obj_type != PDHCG_NON_Q) {
       printf("L2 Norm of Quadratic Objective Matrix: %.3e\n",
              state->quadratic_objective_term->norm);
-      printf("Non-Convexity of Quadratic Objective Matrix: %.3e\n",
+      printf("Minimum Eigenvalue of Q: %.3e\n",
              state->quadratic_objective_term->nonconvexity);
     }
-    printf(
-        "---------------------------------------------------------------------"
-        "------------------\n");
-    printf("%s | %s | %s | %s \n", "   runtime    ", "    objective     ",
-           "  absolute residuals   ", "  relative residuals   ");
-    printf("%s %s | %s %s | %s %s %s | %s %s %s \n", "  iter", "  time ",
-           " pr obj ", "  du obj ", " pr res", " du res", "  gap  ", " pr res",
-           " du res", "  gap  ");
-    printf(
-        "---------------------------------------------------------------------"
-        "------------------\n");
+    printf("-------------------------------------------------------------------"
+           "----------"
+           "----------------------\n");
+    printf("%s | %s | %s | %s \n", "        runtime       ",
+           "    objective     ", "  absolute residuals   ",
+           "  relative residuals   ");
+    printf("%s %s %s | %s %s | %s %s %s | %s %s %s \n", "  iter", "  inner",
+           "  time ", " pr obj ", "  du obj ", " pr res", " du res", "  gap  ",
+           " pr res", " du res", "  gap  ");
+    printf("-------------------------------------------------------------------"
+           "----------"
+           "----------------------\n");
   }
 
   return state;

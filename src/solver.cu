@@ -101,11 +101,11 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params,
     display_iteration_stats(state, params->verbose);
   }
 
-  if (params->feasibility_polishing &&
-      state->termination_reason != TERMINATION_REASON_DUAL_INFEASIBLE &&
-      state->termination_reason != TERMINATION_REASON_PRIMAL_INFEASIBLE) {
-    feasibility_polish(params, state);
-  }
+  // if (params->feasibility_polishing &&
+  //     state->termination_reason != TERMINATION_REASON_DUAL_INFEASIBLE &&
+  //     state->termination_reason != TERMINATION_REASON_PRIMAL_INFEASIBLE) {
+  //   feasibility_polish(params, state);
+  // }
 
   pdhcg_result_t *result = create_result_from_state(state, original_problem);
 

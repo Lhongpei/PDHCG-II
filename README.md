@@ -84,25 +84,10 @@ Solver Parameters:
 | --sv_tol | double | Tolerance for singular value estimation. | 1e-4 |
 | --eval_freq | int | Frequency of termination criteria evaluation (in iterations). | 200 |
 | --opt_norm | string | Norm for optimality criteria (l2 or linf). | linf |
-
+| --inner_iter_limit | int | Max iterations for the inner solver. | 1000 |
+| --inner_init_tol | double | Initial tolerance for the inner solver. | 1e-3 |
+| --inner_min_tol | double | Minimum tolerance for the inner solver. | 1e-9 |
 ---
-
-<!-- ## Citation
-
-If you use PDHCG in your research, please cite our paper:
-
-```bibtex
-@article{Li2024,
-  author  = {Li, Hongpei and Huang, Yicheng and Liu, Huikang and Ge, Dongdong and Ye, Yinyu},
-  title   = {A GPU-Based Primal-Dual Hybrid Gradient Method for Quadratic Programming},
-  journal = {INFORMS Journal on Computing},
-  year    = {2024},
-  doi     = {10.1287/ijoc.2024.0983},
-  URL     = {https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983}
-}
-```
-
---- -->
 
 ## Python Interface
 

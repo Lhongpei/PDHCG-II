@@ -450,6 +450,7 @@ void pdhg_update(pdhg_solver_state_t *state) {
     fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
     exit(EXIT_FAILURE);
   }
+  state->inner_solver->total_count++;
 
   // Dual Update
   CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol,
@@ -623,9 +624,7 @@ void compute_fixed_point_error(pdhg_solver_state_t *state) {
     state->inner_solver->tol = fmin(
         state->inner_solver->tol,
         fmax(0.0005 * primal_norm / state->step_size * state->primal_weight,
-             1e-9));
-    // printf("Update Inner Solver Tolerence to:  %.3e, primal movement is:
-    // %.3e\n",state->inner_solver->tol, primal_norm);
+             state->inner_solver->min_tol));
   }
 }
 

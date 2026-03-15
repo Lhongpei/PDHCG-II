@@ -97,6 +97,12 @@ typedef struct {
 } termination_criteria_t;
 
 typedef struct {
+  int iteration_limit;
+  double initial_tolerance;
+  double min_tolerance;
+} inner_solver_parameters_t;
+
+typedef struct {
   int l_inf_ruiz_iterations;
   bool has_pock_chambolle_alpha;
   double pock_chambolle_alpha;
@@ -110,6 +116,7 @@ typedef struct {
   double reflection_coefficient;
   bool feasibility_polishing;
   norm_type_t optimality_norm;
+  inner_solver_parameters_t inner_solver_parameters;
 } pdhg_parameters_t;
 
 typedef struct {

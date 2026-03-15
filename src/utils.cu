@@ -496,6 +496,10 @@ void set_default_parameters(pdhg_parameters_t *params) {
   params->restart_params.i_smooth = 0.3;
 
   params->optimality_norm = NORM_TYPE_L_INF;
+
+  params->inner_solver_parameters.iteration_limit = 1000;
+  params->inner_solver_parameters.initial_tolerance = 1e-3;
+  params->inner_solver_parameters.min_tolerance = 1e-9;
 }
 
 #define PRINT_DIFF_INT(name, current, default_val)                             \
@@ -526,29 +530,26 @@ void print_initial_info(const pdhg_parameters_t *params,
   if (params->verbose < 2) {
     return;
   }
-  printf("---------------------------------------------------------------------"
-         "------------------\n");
-  printf("                                   PDHCG-II                          "
-         "    "
-         "                  \n");
-  printf("              A GPU-Accelerated First-Order Solver for Convex QPs "
-         "                  \n");
-  // printf("                        Current Support Problem Class:        "
-  //         "                  \n");
-  // printf("                    [Linear Program, Convex Quadratic Program] "
-  //             "                  \n");
-  printf("                            (c) Hongpei Li, 2026                     "
-         "    "
-         "                  \n");
-  printf("                        Contact: ishongpeili@gmail.com               "
-         "     "
-         "                  \n");
-  printf("                                                                     "
-         "    "
-         "                  \n");
 
-  printf("---------------------------------------------------------------------"
-         "------------------\n");
+  const int total_width = 96;
+  const char *line = "---------------------------------------------------------"
+                     "------------------------------------------";
+
+  printf("%s\n", line);
+
+  auto print_centered = [total_width](const char *text) {
+    int len = strlen(text);
+    int padding = (total_width + len) / 2;
+    printf("%*s\n", padding, text);
+  };
+
+  print_centered("PDHCG-II");
+  print_centered("A GPU-Accelerated First-Order Solver for Convex QPs");
+  print_centered("(c) Hongpei Li, 2026");
+  print_centered("Contact: ishongpeili@gmail.com");
+  printf("\n");
+
+  printf("%s\n", line);
 
   printf("problem: %d rows, %d columns, %d nonzeros\n",
          problem->num_constraints, problem->num_variables,
@@ -598,14 +599,19 @@ void pdhg_final_log(const pdhcg_result_t *result,
                     const pdhg_parameters_t *params) {
   if (params->verbose >= 2) {
     printf("-------------------------------------------------------------------"
-           "--------------------\n");
+           "----------"
+           "----------------------\n");
   }
-  if (params->verbose < 1) return;
+  if (params->verbose < 1)
+    return;
   printf("Solution Summary\n");
   printf("  Status             : %s\n",
          termination_reason_to_string(result->termination_reason));
   printf("  Solve time         : %.3g sec\n", result->cumulative_time_sec);
   printf("  Iterations         : %d\n", result->total_count);
+  if (result->total_inner_count > 0) {
+    printf("  Inner Iterations   : %d\n", result->total_inner_count);
+  }
   printf("  Primal objective   : %.10g\n", result->primal_objective_value);
   printf("  Dual objective     : %.10g\n", result->dual_objective_value);
   printf("  Objective gap      : %.3e\n", result->relative_objective_gap);
@@ -618,12 +624,13 @@ void display_iteration_stats(const pdhg_solver_state_t *state, int verbose) {
     return;
   }
   if (state->total_count % get_print_frequency(state->total_count) == 0) {
-    printf("%6d %.1e | %8.1e  %8.1e | %.1e %.1e %.1e | %.1e %.1e %.1e \n",
-           state->total_count, state->cumulative_time_sec,
-           state->primal_objective_value, state->dual_objective_value,
-           state->absolute_primal_residual, state->absolute_dual_residual,
-           state->objective_gap, state->relative_primal_residual,
-           state->relative_dual_residual, state->relative_objective_gap);
+    printf("%6d %7d %.1e | %8.1e  %8.1e | %.1e %.1e %.1e | %.1e %.1e %.1e \n",
+           state->total_count, state->inner_solver->total_count,
+           state->cumulative_time_sec, state->primal_objective_value,
+           state->dual_objective_value, state->absolute_primal_residual,
+           state->absolute_dual_residual, state->objective_gap,
+           state->relative_primal_residual, state->relative_dual_residual,
+           state->relative_objective_gap);
   }
 }
 
@@ -1349,7 +1356,8 @@ void pdhg_feas_polish_final_log(const pdhg_solver_state_t *primal_state,
     printf("-------------------------------------------------------------------"
            "--------------------\n");
   }
-  if (verbose < 1) return;
+  if (verbose < 1)
+    return;
   printf("Feasibility Polishing Summary\n");
   printf("  Primal Status        : %s\n",
          termination_reason_to_string(primal_state->termination_reason));
