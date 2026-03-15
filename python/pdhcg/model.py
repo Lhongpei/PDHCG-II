@@ -80,8 +80,16 @@ class _ParamsView:
 
 
 class Model:
-    """
-    A class representing a linear programming model.
+    r"""
+    A class representing a quadratic programming (QP) model for PDHCG.
+
+    The quadratic programming problem is defined as:
+
+    ```
+    minimize      1/2 x^T (Q + R^T R) x + c^T x
+    subject to    l_c <= A x <= u_c
+                  l_v <= x <= u_v
+    ```
     """
 
     def __init__(
@@ -100,14 +108,16 @@ class Model:
         Initialize the Model with the given parameters.
 
         Parameters:
-        - objective_vector: Coefficients of the objective function.
-        - constraint_matrix: Coefficients of the constraints.
-        - lower_bounds: Lower bounds for the decision variables.
-        - upper_bounds: Upper bounds for the decision variables.
-        - constraint_lower_bounds: Lower bounds for the constraints.
-        - constraint_upper_bounds: Upper bounds for the constraints.
+        - objective_vector: Linear coefficients of the objective function (c).
+        - constraint_matrix: Coefficients of the linear constraints (A).
+        - constraint_lower_bound: Lower bounds for the linear constraints.
+        - constraint_upper_bound: Upper bounds for the linear constraints.
+        - objective_matrix: Quadratic coefficients of the objective function (Q).
+        - objective_matrix_low_rank: Low-rank quadratic coefficients of the objective (R).
+        - variable_lower_bound: Lower bounds for the decision variables.
+        - variable_upper_bound: Upper bounds for the decision variables.
         - objective_constant: Constant term in the objective function.
-        - model_sense: PDHCG.MINIMIZE or PDHCG.MAXIMIZE.
+
         If variable bounds are not provided, they default to -inf and +inf respectively.
         """
         # problem dimensions
@@ -206,7 +216,7 @@ class Model:
 
     def setObjectiveVector(self, c: ArrayLike) -> None:
         """
-        Overwrite objective vector c.
+        Overwrite the linear objective vector c.
         """
         # store as float64
         self.c = _as_dense_f64_c(c)
@@ -225,7 +235,6 @@ class Model:
     def setObjectiveConstant(self, c0: float) -> None:
         """
         Overwrite objective constant term.
-        Minimal check: convert to float.
         """
         self.c0 = float(c0)
         # clear cached solution
@@ -233,7 +242,7 @@ class Model:
 
     def setObjectiveMatrix(self, Q_like: ArrayLike) -> None:
         """
-        Overwrite constraint matrix A.
+        Overwrite the quadratic objective matrix Q.
         """
         if Q_like is None:
             self.Q = None
@@ -241,15 +250,15 @@ class Model:
             return
         if not isinstance(Q_like, (np.ndarray, sp.spmatrix)):
             raise TypeError(
-                "setConstraintMatrix: Q must be a numpy.ndarray or scipy.sparse matrix"
+                "setObjectiveMatrix: Q must be a numpy.ndarray or scipy.sparse matrix"
             )
         if len(Q_like.shape) != 2:
             raise ValueError(
-                f"setConstraintMatrix: Q must be 2D, got shape {Q_like.shape}"
+                f"setObjectiveMatrix: Q must be 2D, got shape {Q_like.shape}"
             )
         if Q_like.shape[1] != self.num_vars:
             raise ValueError(
-                f"setConstraintMatrix: Q shape {Q_like.shape} does not match number of variables ({self.num_vars})"
+                f"setObjectiveMatrix: Q shape {Q_like.shape} does not match number of variables ({self.num_vars})"
             )
         # store as float64
         if sp.issparse(Q_like):
@@ -259,12 +268,12 @@ class Model:
         # problem dimensions
         if not hasattr(self.Q, "shape") or len(self.Q.shape) != 2:
             raise ValueError(
-                "constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
+                "objective_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
             )
 
     def setObjectiveMatrixLowRank(self, R_like: ArrayLike) -> None:
         """
-        Overwrite low-rank objective matrix R.
+        Overwrite the low-rank quadratic objective matrix R.
         """
         if R_like is None:
             self.R = None
@@ -293,7 +302,7 @@ class Model:
 
     def setConstraintMatrix(self, A_like: ArrayLike) -> None:
         """
-        Overwrite constraint matrix A.
+        Overwrite the linear constraint matrix A.
         """
         if A_like is None:
             self.A = None
@@ -348,7 +357,7 @@ class Model:
 
     def setConstraintLowerBound(self, constr_lb: Optional[ArrayLike]) -> None:
         """
-        Overwrite constraint lower bounds.
+        Overwrite the linear constraint lower bounds.
         """
         # check if the input is None
         if constr_lb is None:
@@ -368,7 +377,7 @@ class Model:
 
     def setConstraintUpperBound(self, constr_ub: Optional[ArrayLike]) -> None:
         """
-        Overwrite constraint upper bounds.
+        Overwrite the linear constraint upper bounds.
         """
         # check if the input is None
         if constr_ub is None:
@@ -388,7 +397,7 @@ class Model:
 
     def setVariableLowerBound(self, lb: Optional[ArrayLike]) -> None:
         """
-        Overwrite variable lower bounds.
+        Overwrite the decision variable lower bounds.
         """
         # check if the input is None
         if lb is None:
@@ -408,7 +417,7 @@ class Model:
 
     def setVariableUpperBound(self, ub: Optional[ArrayLike]) -> None:
         """
-        Overwrite variable upper bounds.
+        Overwrite the decision variable upper bounds.
         """
         # check if the input is None
         if ub is None:
@@ -481,14 +490,14 @@ class Model:
 
     def setParams(self, /, **kwargs) -> None:
         """
-        Set multiple solver parameters by name.
+        Set multiple solver parameters by keyword arguments.
         """
         for k, v in kwargs.items():
             self.setParam(k, v)
 
     def optimize(self):
         """
-        Solve the linear programming problem using the PDHCG solver.
+        Solve the quadratic programming problem using the PDHCG solver.
         """
         # clear cached solution
         self._clear_solution_cache()

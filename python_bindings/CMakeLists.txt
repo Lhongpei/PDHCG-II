@@ -22,8 +22,19 @@ set_target_properties(_pdhcg_core PROPERTIES
 # better error messages from pybind11
 target_compile_definitions(_pdhcg_core PRIVATE PYBIND11_DETAILED_ERROR_MESSAGES=1)
 
+add_custom_command(TARGET _pdhcg_core POST_BUILD
+    COMMAND ${Python3_EXECUTABLE} -m pybind11_stubgen _pdhcg_core -o ${CMAKE_CURRENT_SOURCE_DIR}/../pdhcg
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "Auto-generating _pdhcg_core.pyi type stubs for Python IDEs..."
+)
+
 install(TARGETS _pdhcg_core
   LIBRARY DESTINATION pdhcg
   RUNTIME DESTINATION pdhcg
   ARCHIVE DESTINATION pdhcg
+)
+
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../pdhcg/_pdhcg_core.pyi
+  DESTINATION pdhcg
+  OPTIONAL
 )

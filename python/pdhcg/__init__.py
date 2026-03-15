@@ -13,6 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+PDHCG: Primal-Dual Hybrid Conjugate Gradient Solver
+===================================================
+
+PDHCG is a high-performance, GPU-accelerated solver designed for 
+large-scale convex Quadratic Programming (QP) and structured optimization.
+It fully leverages NVIDIA CUDA architectures for extreme-scale problems.
+
+Main Classes
+------------
+Model
+    The core solver interface for defining and optimizing QP subproblems.
+
+Links
+-----
+* Repository: https://github.com/Lhongpei/PDHCG-II
+"""
+
 from .model import Model
 from . import PDHCG
 
