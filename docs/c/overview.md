@@ -1,0 +1,132 @@
+# C API Overview
+
+PDHCG provides a C API for integration with other languages and applications.
+
+## Header Files
+
+```c
+#include "pdhcg.h"       // Main API functions
+#include "pdhcg_types.h" // Type definitions
+```
+
+## Quick Example
+
+```c
+#include "pdhcg.h"
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // Define problem dimensions
+    int n = 2;  // variables
+    int m = 3;  // constraints
+
+    // Objective vector
+    double c[] = {-2.0, -6.0};
+
+    // Constraint matrix (CSR format)
+    int row_ptr[] = {0, 2, 4, 6};
+    int col_ind[] = {0, 1, 0, 1, 0, 1};
+    double vals[] = {1.0, 1.0, -1.0, 2.0, 2.0, 1.0};
+
+    matrix_desc_t A_desc = {
+        .m = m,
+        .n = n,
+        .fmt = matrix_csr,
+        .zero_tolerance = 0.0,
+        .data.csr.nnz = 6,
+        .data.csr.row_ptr = row_ptr,
+        .data.csr.col_ind = col_ind,
+        .data.csr.vals = vals
+    };
+
+    // Bounds
+    double con_lb[] = {-1e30, -1e30, -1e30};
+    double con_ub[] = {2.0, 2.0, 3.0};
+    double var_lb[] = {0.0, 0.0};
+    double var_ub[] = {1e30, 1e30};
+
+    // Create problem
+    qp_problem_t *prob = create_qp_problem(
+        c, NULL, NULL, &A_desc,
+        con_lb, con_ub, var_lb, var_ub, NULL
+    );
+
+    // Set parameters
+    pdhg_parameters_t params;
+    set_default_parameters(&params);
+    params.verbose = 1;
+
+    // Solve
+    pdhcg_result_t *result = solve_qp_problem(prob, &params);
+
+    // Print results
+    printf("Status: %d\n", result->termination_reason);
+    printf("Objective: %f\n", result->primal_objective_value);
+    printf("Iterations: %d\n", result->total_count);
+
+    // Cleanup
+    pdhcg_result_free(result);
+    qp_problem_free(prob);
+
+    return 0;
+}
+```
+
+## Main Functions
+
+### Problem Creation
+
+```c
+qp_problem_t *create_qp_problem(
+    const double *objective_c,
+    const matrix_desc_t *Q_desc,
+    const matrix_desc_t *R_desc,
+    const matrix_desc_t *A_desc,
+    const double *con_lb, const double *con_ub,
+    const double *var_lb, const double *var_ub,
+    const double *objective_constant
+);
+```
+
+Creates a QP problem from matrix descriptors. The `Q_desc` (sparse quadratic) and `R_desc` (low-rank quadratic) are optional (pass `NULL` if not needed).
+
+### Setting Start Values
+
+```c
+void set_start_values(
+    qp_problem_t *prob,
+    const double *primal,
+    const double *dual
+);
+```
+
+Sets initial primal and dual solutions for warm starting.
+
+### Solving
+
+```c
+pdhcg_result_t *solve_qp_problem(
+    const qp_problem_t *prob,
+    const pdhg_parameters_t *params
+);
+```
+
+Solves the QP problem and returns the results.
+
+### Default Parameters
+
+```c
+void set_default_parameters(pdhg_parameters_t *params);
+```
+
+Fills the parameter struct with default values.
+
+### Cleanup
+
+```c
+void pdhcg_result_free(pdhcg_result_t *results);
+void qp_problem_free(qp_problem_t *prob);
+```
+
+Frees allocated memory for results and problems.

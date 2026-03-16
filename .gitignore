@@ -64,3 +64,4 @@ test/*
 *.whl
 *.pyc
 *.tar.gz
+docs/README.md

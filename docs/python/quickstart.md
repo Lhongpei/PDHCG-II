@@ -1,0 +1,137 @@
+# Python Quick Start
+
+PDHCG provides a user-friendly Python interface that allows you to define, solve, and analyze QP problems using familiar libraries like NumPy and SciPy.
+
+## Basic Usage
+
+```python
+import numpy as np
+import scipy.sparse as sp
+from pdhcg import Model
+
+# Example: minimize 0.5 * x'(Q + R'R)x + c'x
+# subject to l <= A x <= u,  lb <= x <= ub
+
+# 1. Define Standard QP terms
+Q = sp.csc_matrix([[1.0, -1.0], [-1.0, 2.0]])
+c = np.array([-2.0, -6.0])
+
+# 2. Define Low-Rank Matrix R
+# This adds 0.5 * ||Rx||^2 to the objective
+R = sp.csc_matrix([[1.0, 0.0]])
+
+# 3. Define Constraints
+A = sp.csc_matrix([[1.0, 1.0], [-1.0, 2.0], [2.0, 1.0]])
+l = np.array([-np.inf, -np.inf, -np.inf])
+u = np.array([2.0, 2.0, 3.0])
+lb = np.zeros(2)
+ub = np.array([np.inf, np.inf])
+
+# 4. Create QP model with Low-Rank term (R)
+m = Model(objective_matrix=Q,
+          objective_matrix_low_rank=R,
+          objective_vector=c,
+          constraint_matrix=A,
+          constraint_lower_bound=l,
+          constraint_upper_bound=u,
+          variable_lower_bound=lb,
+          variable_upper_bound=ub)
+
+# 5. Set solver parameters (0=Silent, 1=Summary, 2=Detailed)
+m.setParams(LogLevel=2)
+
+# Solve
+m.optimize()
+
+# Print results
+print(f"Status: {m.Status}")
+print(f"Objective: {m.ObjVal:.4f}")
+if m.X is not None:
+    print(f"Primal Solution: {m.X}")
+```
+
+## Model Creation
+
+The `Model` class is the core interface for defining QP problems. The problem formulation is:
+
+$$
+\begin{aligned}
+\min_{x} \quad & \frac{1}{2}x^\top (Q + R^\top R) x + c^\top x \\
+\text{s.t.} \quad & \ell_c \le Ax \le u_c, \\
+                  & \ell_v \le x \le u_v.
+\end{aligned}
+$$
+
+### Required Parameters
+
+- `objective_vector` ($c$): Linear coefficients of the objective function
+
+### Optional Parameters
+
+- `objective_matrix` ($Q$): Sparse quadratic coefficients
+- `objective_matrix_low_rank` ($R$): Low-rank quadratic component (stores $R$, objective gets $R^\top R$)
+- `constraint_matrix` ($A$): Linear constraint matrix
+- `constraint_lower_bound` ($\ell_c$): Constraint lower bounds
+- `constraint_upper_bound` ($u_c$): Constraint upper bounds
+- `variable_lower_bound` ($\ell_v$): Variable lower bounds (default: $-\infty$)
+- `variable_upper_bound` ($u_v$): Variable upper bounds (default: $+\infty$)
+- `objective_constant`: Constant term in objective
+
+## Setting Parameters
+
+Solver parameters can be set individually or in batch:
+
+```python
+# Set individual parameter
+m.setParam("TimeLimit", 3600)
+
+# Set multiple parameters
+m.setParams(
+    TimeLimit=3600,
+    IterationLimit=100000,
+    LogLevel=1
+)
+
+# Or use the Params view
+m.Params.TimeLimit = 3600
+```
+
+## Warm Starting
+
+Provide initial solutions to speed up convergence:
+
+```python
+# Set warm start
+m.setWarmStart(primal=x0, dual=y0)
+
+# Clear warm start
+m.clearWarmStart()
+```
+
+## Accessing Results
+
+After calling `optimize()`, results are available through properties:
+
+```python
+m.optimize()
+
+# Solution
+print(m.X)          # Primal solution
+print(m.Pi)         # Dual solution
+
+# Objective
+print(m.ObjVal)     # Primal objective value
+print(m.DualObj)    # Dual objective value
+print(m.Gap)        # Objective gap
+print(m.RelGap)     # Relative gap
+
+# Status
+print(m.Status)         # Solution status string
+print(m.StatusCode)     # Solution status code
+print(m.IterCount)      # Number of iterations
+print(m.Runtime)        # Runtime in seconds
+
+# Residuals
+print(m.RelPrimalResidual)  # Relative primal residual
+print(m.RelDualResidual)    # Relative dual residual
+```

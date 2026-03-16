@@ -1,0 +1,113 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'python_bindings/**'
+      - 'CMakeLists.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'python_bindings/**'
+      - 'CMakeLists.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-cpp:
+    name: Build C++ Executable
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.4.0-devel-ubuntu22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y cmake build-essential
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DPDHCG_BUILD_CLI=ON \
+            -DPDHCG_BUILD_TESTS=OFF \
+            -DPDHCG_BUILD_PYTHON=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake --build build --clean-first -j$(nproc)
+
+      - name: Check executable
+        run: |
+          test -f build/bin/pdhcg
+          ./build/bin/pdhcg --help || true
+
+  build-python:
+    name: Build Python Package
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.4.0-devel-ubuntu22.04
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y cmake build-essential python${{ matrix.python-version }} python${{ matrix.python-version }}-dev python3-pip
+
+      - name: Install Python build dependencies
+        run: |
+          python${{ matrix.python-version }} -m pip install --upgrade pip
+          python${{ matrix.python-version }} -m pip install build
+
+      - name: Build Python package
+        run: |
+          python${{ matrix.python-version }} -m build --wheel
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheel-py${{ matrix.python-version }}
+          path: dist/*.whl
+          retention-days: 7
+
+  test-python-import:
+    name: Test Python Import
+    runs-on: ubuntu-latest
+    needs: build-python
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-wheel-py3.11
+          path: dist/
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install and test import
+        run: |
+          pip install dist/*.whl
+          python -c "import pdhcg; print(f'pdhcg version: {pdhcg.__version__}')"
+        continue-on-error: true

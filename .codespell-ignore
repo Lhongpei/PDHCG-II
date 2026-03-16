@@ -1,0 +1,58 @@
+# Words to ignore during spell checking
+# Add one word per line
+
+# Technical terms
+nd
+np
+sp
+qp
+pdhcg
+pdhg
+cupdlp
+
+# Variable names commonly used
+rhs
+lhs
+vals
+indptr
+indices
+nnz
+obj
+var
+vars
+constr
+constrs
+
+# Algorithm names
+ruiz
+pock
+chambolle
+
+# File extensions or formats
+mps
+qps
+
+# Matrix formats
+coo
+COO
+csr
+CSR
+csc
+CSC
+dense
+
+# Common abbreviations
+eps
+tol
+iter
+sec
+min
+max
+
+# Author names
+hongpei
+haihao
+yicheng
+huikang
+dongdong
+yinyu

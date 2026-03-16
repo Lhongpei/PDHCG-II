@@ -14,14 +14,15 @@
 # limitations under the License.
 
 from __future__ import annotations
+
 import warnings
 from typing import Any, Optional, Union
 
 import numpy as np
 import scipy.sparse as sp
 
-from ._core import solve_once, get_default_params
 from . import PDHCG
+from ._core import get_default_params, solve_once
 
 # array-like type
 ArrayLike = Union[np.ndarray, list, tuple]
@@ -57,7 +58,7 @@ class _ParamsView:
     A view of the model parameters that allows getting/setting via attributes or keys.
     """
 
-    def __init__(self, model: "Model"):
+    def __init__(self, model: Model):
         object.__setattr__(self, "_m", model)
 
     def __getattr__(self, name: str):
@@ -107,18 +108,19 @@ class Model:
         """
         Initialize the Model with the given parameters.
 
-        Parameters:
-        - objective_vector: Linear coefficients of the objective function (c).
-        - constraint_matrix: Coefficients of the linear constraints (A).
-        - constraint_lower_bound: Lower bounds for the linear constraints.
-        - constraint_upper_bound: Upper bounds for the linear constraints.
-        - objective_matrix: Quadratic coefficients of the objective function (Q).
-        - objective_matrix_low_rank: Low-rank quadratic coefficients of the objective (R).
-        - variable_lower_bound: Lower bounds for the decision variables.
-        - variable_upper_bound: Upper bounds for the decision variables.
-        - objective_constant: Constant term in the objective function.
+        Args:
+            objective_vector: Linear coefficients of the objective function (c).
+            constraint_matrix: Coefficients of the linear constraints (A).
+            constraint_lower_bound: Lower bounds for the linear constraints.
+            constraint_upper_bound: Upper bounds for the linear constraints.
+            objective_matrix: Quadratic coefficients of the objective function (Q).
+            objective_matrix_low_rank: Low-rank quadratic coefficients of the objective (R).
+            variable_lower_bound: Lower bounds for the decision variables.
+            variable_upper_bound: Upper bounds for the decision variables.
+            objective_constant: Constant term in the objective function.
 
-        If variable bounds are not provided, they default to -inf and +inf respectively.
+        Note:
+            If variable bounds are not provided, they default to -inf and +inf respectively.
         """
         # problem dimensions
         self.num_vars = 0
@@ -126,10 +128,7 @@ class Model:
 
         # Check A
         if constraint_matrix is not None:
-            if (
-                not hasattr(constraint_matrix, "shape")
-                or len(constraint_matrix.shape) != 2
-            ):
+            if not hasattr(constraint_matrix, "shape") or len(constraint_matrix.shape) != 2:
                 raise ValueError(
                     "constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
                 )
@@ -139,10 +138,7 @@ class Model:
 
         # Check Q (if A was None, try to infer n from Q)
         if objective_matrix is not None:
-            if (
-                not hasattr(objective_matrix, "shape")
-                or len(objective_matrix.shape) != 2
-            ):
+            if not hasattr(objective_matrix, "shape") or len(objective_matrix.shape) != 2:
                 raise ValueError(
                     "objective_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
                 )
@@ -222,9 +218,7 @@ class Model:
         self.c = _as_dense_f64_c(c)
         # check dimensions
         if self.c.ndim != 1:
-            raise ValueError(
-                f"setObjectiveVector: c must be 1D, got shape {self.c.shape}"
-            )
+            raise ValueError(f"setObjectiveVector: c must be 1D, got shape {self.c.shape}")
         if self.c.size != self.num_vars:
             raise ValueError(
                 f"setObjectiveVector: length {self.c.size} != self.num_vars ({self.num_vars})"
@@ -249,13 +243,9 @@ class Model:
             self._clear_solution_cache()
             return
         if not isinstance(Q_like, (np.ndarray, sp.spmatrix)):
-            raise TypeError(
-                "setObjectiveMatrix: Q must be a numpy.ndarray or scipy.sparse matrix"
-            )
+            raise TypeError("setObjectiveMatrix: Q must be a numpy.ndarray or scipy.sparse matrix")
         if len(Q_like.shape) != 2:
-            raise ValueError(
-                f"setObjectiveMatrix: Q must be 2D, got shape {Q_like.shape}"
-            )
+            raise ValueError(f"setObjectiveMatrix: Q must be 2D, got shape {Q_like.shape}")
         if Q_like.shape[1] != self.num_vars:
             raise ValueError(
                 f"setObjectiveMatrix: Q shape {Q_like.shape} does not match number of variables ({self.num_vars})"
@@ -267,9 +257,7 @@ class Model:
             self.Q = _as_dense_f64_c(Q_like)
         # problem dimensions
         if not hasattr(self.Q, "shape") or len(self.Q.shape) != 2:
-            raise ValueError(
-                "objective_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
-            )
+            raise ValueError("objective_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
 
     def setObjectiveMatrixLowRank(self, R_like: ArrayLike) -> None:
         """
@@ -285,9 +273,7 @@ class Model:
                 "setObjectiveMatrixLowRank: R must be a numpy.ndarray or scipy.sparse matrix"
             )
         if len(R_like.shape) != 2:
-            raise ValueError(
-                f"setObjectiveMatrixLowRank: R must be 2D, got shape {R_like.shape}"
-            )
+            raise ValueError(f"setObjectiveMatrixLowRank: R must be 2D, got shape {R_like.shape}")
         if R_like.shape[1] != self.num_vars:
             raise ValueError(
                 f"setObjectiveMatrixLowRank: R columns {R_like.shape[1]} must match variables ({self.num_vars})"
@@ -312,13 +298,9 @@ class Model:
             self._clear_solution_cache()
             return
         if not isinstance(A_like, (np.ndarray, sp.spmatrix)):
-            raise TypeError(
-                "setConstraintMatrix: A must be a numpy.ndarray or scipy.sparse matrix"
-            )
+            raise TypeError("setConstraintMatrix: A must be a numpy.ndarray or scipy.sparse matrix")
         if len(A_like.shape) != 2:
-            raise ValueError(
-                f"setConstraintMatrix: A must be 2D, got shape {A_like.shape}"
-            )
+            raise ValueError(f"setConstraintMatrix: A must be 2D, got shape {A_like.shape}")
         if A_like.shape[1] != self.num_vars:
             raise ValueError(
                 f"setConstraintMatrix: A shape {A_like.shape} does not match number of variables ({self.num_vars})"
@@ -330,9 +312,7 @@ class Model:
             self.A = _as_dense_f64_c(A_like)
         # problem dimensions
         if not hasattr(self.A, "shape") or len(self.A.shape) != 2:
-            raise ValueError(
-                "constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix."
-            )
+            raise ValueError("constraint_matrix must be a 2D numpy.ndarray or scipy.sparse matrix.")
         m, _ = self.A.shape
         self.num_constrs = int(m)
         # check constraint bounds
@@ -536,15 +516,11 @@ class Model:
         self._gap = info.get("ObjectiveGap")
         self._rel_gap = info.get("RelativeObjectiveGap")
         # status & counters
-        self._status = (
-            str(info.get("Status")) if info.get("Status") is not None else None
-        )
+        self._status = str(info.get("Status")) if info.get("Status") is not None else None
         self._status_code = (
             int(info.get("StatusCode")) if info.get("StatusCode") is not None else None
         )
-        self._iter = (
-            int(info.get("Iterations")) if info.get("Iterations") is not None else None
-        )
+        self._iter = int(info.get("Iterations")) if info.get("Iterations") is not None else None
         self._runtime = info.get("RuntimeSec")
         self._rescale_time = info.get("RescalingTimeSec")
         # residuals
@@ -555,9 +531,7 @@ class Model:
         self._max_d_ray = info.get("MaxDualRayInfeas")
         p_ray_lin_eff = info.get("PrimalRayLinObj")
         d_ray_obj_eff = info.get("DualRayObj")
-        self._p_ray_lin_obj = (
-            sign * p_ray_lin_eff if p_ray_lin_eff is not None else None
-        )
+        self._p_ray_lin_obj = sign * p_ray_lin_eff if p_ray_lin_eff is not None else None
         self._d_ray_obj = sign * d_ray_obj_eff if d_ray_obj_eff is not None else None
 
     def _clear_solution_cache(self) -> None:

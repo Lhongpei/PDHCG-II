@@ -1,0 +1,46 @@
+name: Clang Format
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'python_bindings/**'
+      - '.clang-format'
+      - '.github/workflows/clang-format.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'python_bindings/**'
+      - '.clang-format'
+      - '.github/workflows/clang-format.yml'
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Check C/C++ formatting
+        run: |
+          find . \
+            -type f \
+            \( -name "*.c" -o -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.cu" -o -name "*.cuh" \) \
+            -not -path "./build/*" \
+            -not -path "./.git/*" \
+            -not -path "./dist/*" \
+            -exec clang-format --style=file --dry-run --Werror {} +
+        shell: bash
