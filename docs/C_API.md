@@ -1,7 +1,7 @@
 
 ### C Interface
 
-PDHCG-II provides a C API for directly solving QPs in memory, defined in header file [`include/pdhcg.h`](../include/pdhcg.h).
+PDHCG-II provides a C API for directly solving QPs in memory, defined in header file `include/pdhcg.h`.
 
 #### Functions and Parameters
 
@@ -84,7 +84,7 @@ int main() {
     // 4. Constraint bounds: l <= A x <= u
     double l[3] = {-INFINITY, -INFINITY, -INFINITY};
     double u[3] = {2.0, 2.0, 3.0};
-    
+
     // 5. Variable bounds: x >= 0
     double lb[2] = {0.0, 0.0};
     double ub[2] = {INFINITY, INFINITY};

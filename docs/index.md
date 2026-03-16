@@ -27,8 +27,6 @@ Where:
 
 - **GPU Acceleration**: Fully leverages NVIDIA CUDA for extreme-scale QP problems
 - **Flexible Problem Structure**: Supports sparse quadratic terms, low-rank quadratic terms, or both
-- **Robust Algorithm**: Enhanced PDHCG algorithm with restart mechanisms and preconditioning
-- **Multiple Interfaces**: C++ executable, C API, and Python bindings
 - **High Performance**: Competitive with commercial solvers on large-scale problems
 
 ## Quick Links
