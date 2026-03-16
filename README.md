@@ -30,7 +30,7 @@ To use the standalone C++ solver, you must compile the project using CMake.
 
 ### Requirements
 * **GPU:** NVIDIA GPU with CUDA 12.4+.
-* **Build Tools:** CMake (≥ 3.24), GCC, NVCC.
+* **Build Tools:** CMake (≥ 3.20), GCC, NVCC.
 
 ### Build from Source
 Clone the repository and compile the project using CMake.

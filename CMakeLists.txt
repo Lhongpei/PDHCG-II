@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # ROOT CMakeLists.txt for PDHCG (Unified Build System)
 # -----------------------------------------------------------------------------
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.20)
 
 project(pdhcg LANGUAGES C CXX CUDA)
 
