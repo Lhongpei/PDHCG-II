@@ -19,13 +19,14 @@ If you use PDHCG-II in your research, please cite the following papers:
 ## Original PDHCG Paper
 
 ```bibtex
-@article{li2024restarted,
-  title={A Restarted Primal-Dual Hybrid Conjugate Gradient Method for Large-Scale Quadratic Programming},
-  author={Li, Hongpei and Huang, Yicheng and Liu, Huikang and Ge, Dongdong and Ye, Yinyu},
-  journal={INFORMS Journal on Computing},
-  year={2024},
-  publisher={INFORMS},
-  doi={10.1287/ijoc.2024.0983}
+@misc{pdhcg,
+  author =        {Y. Huang, W. Zhang, H. Li, H. Liu, D. Ge and Y. Ye},
+  publisher =     {INFORMS Journal on Computing},
+  title =         {A Restarted Primal-Dual Hybrid Conjugate Gradient Method for Large-Scale Quadratic Programming},
+  year =          {2025},
+  doi =           {10.1287/ijoc.2024.0983.cd},
+  url =           {https://github.com/INFORMSJoC/2024.0983},
+  note =          {Available for download at https://github.com/INFORMSJoC/2024.0983},
 }
 ```
 
