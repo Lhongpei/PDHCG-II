@@ -77,6 +77,40 @@ endif()
 include(FetchContent)
 
 # -----------------------------------------------------------------------------
+# PSQP (QP Presolver) Integration
+# -----------------------------------------------------------------------------
+# Use FetchContent to automatically download PSQP from git repository
+set(PSQP_VERSION_TAG "v0.1.0" CACHE STRING "PSQP git tag/branch to use")
+
+FetchContent_Declare(
+  psqp
+  GIT_REPOSITORY https://github.com/Lhongpei/PSQP.git
+  GIT_TAG        ${PSQP_VERSION_TAG}
+)
+
+# Check if PSQP has already been populated
+FetchContent_GetProperties(psqp)
+if(NOT psqp_POPULATED)
+    message(STATUS "Fetching PSQP from https://github.com/Lhongpei/PSQP.git (${PSQP_VERSION_TAG})")
+    FetchContent_MakeAvailable(psqp)
+    message(STATUS "PSQP populated at: ${psqp_SOURCE_DIR}")
+endif()
+
+# Set up PSQP include directories
+if(TARGET PSQP)
+    target_include_directories(PSQP INTERFACE
+        $<BUILD_INTERFACE:${psqp_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${psqp_SOURCE_DIR}/include/PSQP>
+    )
+    message(STATUS "PSQP target configured successfully")
+else()
+    message(WARNING "PSQP target not found. Presolving features will be disabled.")
+endif()
+
+# Add version definition
+add_compile_definitions(PSQP_VERSION=\"${PSQP_VERSION_TAG}\")
+
+# -----------------------------------------------------------------------------
 # SOURCE DISCOVERY & TARGET DEFINITION
 # -----------------------------------------------------------------------------
 # Using file(GLOB) for convenience, but explicit lists are recommended for robust builds
@@ -101,6 +135,7 @@ set(CORE_LINK_LIBS PUBLIC
   CUDA::cublas
   CUDA::cusparse
   ZLIB::ZLIB
+  PSQP
 )
 
 # -----------------------------------------------------------------------------
@@ -113,6 +148,10 @@ if(PDHCG_BUILD_STATIC_LIB)
     )
     target_include_directories(pdhcg_core ${CORE_INCLUDE_DIRS})
     target_link_libraries(pdhcg_core ${CORE_LINK_LIBS})
+
+    # Add PSQP compile definition
+    target_compile_definitions(pdhcg_core PUBLIC PSQP_AVAILABLE)
+    message(STATUS "PDHCG: PSQP linked successfully")
 
     set_target_properties(pdhcg_core PROPERTIES
       POSITION_INDEPENDENT_CODE ON
@@ -132,6 +171,9 @@ if(PDHCG_BUILD_SHARED_LIB)
     target_include_directories(PDHCG_shared ${CORE_INCLUDE_DIRS})
     target_link_libraries(PDHCG_shared ${CORE_LINK_LIBS})
 
+    # Add PSQP compile definition
+    target_compile_definitions(PDHCG_shared PUBLIC PSQP_AVAILABLE)
+
     # Shared library must resolve device symbols as it is a final link point
     set_target_properties(PDHCG_shared PROPERTIES
         OUTPUT_NAME "pdhcg"
@@ -148,10 +190,10 @@ if(PDHCG_BUILD_CLI)
     if(NOT TARGET pdhcg_core)
         message(FATAL_ERROR "PDHCG_BUILD_CLI=ON requires PDHCG_BUILD_STATIC_LIB=ON.")
     endif()
-    
+
     add_executable(PDHCG_cli src/cli.c)
 
-    target_include_directories(PDHCG_cli PRIVATE 
+    target_include_directories(PDHCG_cli PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/internal
     )
@@ -160,10 +202,14 @@ if(PDHCG_BUILD_CLI)
     target_link_libraries(PDHCG_cli PRIVATE pdhcg_core)
 
     # CLI is a final executable, it must resolve device symbols
+    # Set RPATH so that libPSQP.so can be found without LD_LIBRARY_PATH
+    # PSQP is in _deps/psqp-build when using FetchContent
     set_target_properties(PDHCG_cli PROPERTIES
         OUTPUT_NAME "pdhcg"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         CUDA_RESOLVE_DEVICE_SYMBOLS ON
+        INSTALL_RPATH "${CMAKE_BINARY_DIR}/_deps/psqp-build"
+        BUILD_WITH_INSTALL_RPATH TRUE
     )
 endif()
 
@@ -182,28 +228,37 @@ if(PDHCG_BUILD_TESTS)
     )
 
     foreach(TEST_SRC ${TEST_SOURCES})
-        get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE) 
-        
+        get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
+
         add_executable(${TEST_NAME} ${TEST_SRC})
-        
+
         # Link tests to the core static library
         target_link_libraries(${TEST_NAME} PRIVATE pdhcg_core)
 
         # Set up test includes
-        target_include_directories(${TEST_NAME} 
+        target_include_directories(${TEST_NAME}
           PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
           PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/internal
         )
-        
+
+        # Set up RPATH to find PSQP if available
+        if(TARGET PSQP)
+            set(TEST_RPATH "${CMAKE_BINARY_DIR}/_deps/psqp-build")
+        else()
+            set(TEST_RPATH "")
+        endif()
+
         # Tests are final executables, they must resolve device symbols
         set_target_properties(${TEST_NAME} PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tests"
             CUDA_RESOLVE_DEVICE_SYMBOLS ON
+            INSTALL_RPATH "${TEST_RPATH}"
+            BUILD_WITH_INSTALL_RPATH TRUE
         )
-        
+
         # Register with CTest
         add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
-        
+
     endforeach()
 endif()
 
@@ -233,14 +288,14 @@ else()
             ARCHIVE DESTINATION lib
         )
     endif()
-    
+
     if(TARGET PDHCG_shared)
         install(TARGETS PDHCG_shared
             LIBRARY DESTINATION lib
             RUNTIME DESTINATION bin # 'bin' for DLLs on Windows, 'lib' for .so on Linux
         )
     endif()
-    
+
     if(TARGET PDHCG_cli)
         install(TARGETS PDHCG_cli
             RUNTIME DESTINATION bin
