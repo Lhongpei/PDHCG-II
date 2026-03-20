@@ -51,10 +51,6 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params, const qp_problem
                 pdhcg_result_t *result = pdhcg_create_result_from_presolve(presolve_info, original_problem);
                 if (result)
                 {
-                    if (presolve_info->presolve_status != 2 && presolve_info->presolve_status != 6)
-                    {
-                        pdhcg_postsolve(presolve_info, result, original_problem);
-                    }
                     pdhg_final_log(result, params);
                 }
                 pdhcg_presolve_info_free(presolve_info);
@@ -83,6 +79,7 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params, const qp_problem
     initialize_step_size_and_primal_weight(state, params);
     clock_t start_time = clock();
     bool do_restart = false;
+
     while (state->total_count < params->termination_criteria.iteration_limit)
     {
         if ((state->is_this_major_iteration || state->total_count == 0) ||

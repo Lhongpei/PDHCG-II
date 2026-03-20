@@ -80,7 +80,7 @@ include(FetchContent)
 # PSQP (QP Presolver) Integration
 # -----------------------------------------------------------------------------
 # Use FetchContent to automatically download PSQP from git repository
-set(PSQP_VERSION_TAG "v0.1.0" CACHE STRING "PSQP git tag/branch to use")
+set(PSQP_VERSION_TAG "main" CACHE STRING "PSQP git tag/branch to use")
 
 FetchContent_Declare(
   psqp
