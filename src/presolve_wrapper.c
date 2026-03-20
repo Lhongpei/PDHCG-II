@@ -163,14 +163,8 @@ pdhcg_presolve_info_t *pdhcg_presolve(const qp_problem_t *original_prob, const p
     if (!info)
         return NULL;
 
-    Settings *settings = default_settings();
-    if (!settings)
-    {
-        free(info);
-        return NULL;
-    }
-    set_settings_false(settings);
-    info->settings = settings;
+    info->settings = default_settings();
+    ((Settings *)info->settings)->verbose = false;
 
     bool has_qr = (original_prob->objective_sparse_matrix != NULL && original_prob->objective_lowrank_matrix != NULL &&
                    original_prob->num_rank_lowrank_obj > 0 && original_prob->objective_lowrank_matrix_num_nonzeros > 0);
@@ -207,7 +201,7 @@ pdhcg_presolve_info_t *pdhcg_presolve(const qp_problem_t *original_prob, const p
                                 original_prob->objective_lowrank_matrix->row_ptr,
                                 Rnnz,
                                 k,
-                                settings);
+                                info->settings);
     }
     else if (has_p)
     {
@@ -228,7 +222,7 @@ pdhcg_presolve_info_t *pdhcg_presolve(const qp_problem_t *original_prob, const p
                              original_prob->objective_sparse_matrix->col_ind,
                              original_prob->objective_sparse_matrix->row_ptr,
                              Pnnz,
-                             settings);
+                             info->settings);
     }
     else
     {
@@ -243,12 +237,12 @@ pdhcg_presolve_info_t *pdhcg_presolve(const qp_problem_t *original_prob, const p
                                   original_prob->variable_lower_bound,
                                   original_prob->variable_upper_bound,
                                   original_prob->objective_vector,
-                                  settings);
+                                  info->settings);
     }
 
     if (!presolver)
     {
-        free_settings(settings);
+        free_settings(info->settings);
         free(info);
         return NULL;
     }
