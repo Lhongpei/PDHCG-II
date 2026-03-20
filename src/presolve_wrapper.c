@@ -15,6 +15,7 @@
 #include "PSQP_sol.h"
 #include "PSQP_status.h"
 #include "presolve_wrapper.h"
+#include "utils.h"
 
 #ifndef PSQP_VERSION
 #define PSQP_VERSION "unknown"
@@ -59,26 +60,56 @@ static qp_problem_t *convert_psqp_to_pdhcg(PresolvedProblem *reduced_prob, doubl
     pdhcg_prob->num_constraints = (int)reduced_prob->m;
     pdhcg_prob->constraint_matrix_num_nonzeros = (int)reduced_prob->nnz;
     pdhcg_prob->objective_constant = original_obj_constant + reduced_prob->obj_offset;
-    pdhcg_prob->objective_vector = reduced_prob->c;
-    pdhcg_prob->constraint_lower_bound = reduced_prob->lhs;
-    pdhcg_prob->constraint_upper_bound = reduced_prob->rhs;
-    pdhcg_prob->variable_lower_bound = reduced_prob->lbs;
-    pdhcg_prob->variable_upper_bound = reduced_prob->ubs;
+
+    /* Copy vector data from PSQP to avoid use-after-free when presolver is freed */
+    if (reduced_prob->c)
+    {
+        pdhcg_prob->objective_vector = (double *)safe_malloc(reduced_prob->n * sizeof(double));
+        memcpy(pdhcg_prob->objective_vector, reduced_prob->c, reduced_prob->n * sizeof(double));
+    }
+    if (reduced_prob->lhs)
+    {
+        pdhcg_prob->constraint_lower_bound = (double *)safe_malloc(reduced_prob->m * sizeof(double));
+        memcpy(pdhcg_prob->constraint_lower_bound, reduced_prob->lhs, reduced_prob->m * sizeof(double));
+    }
+    if (reduced_prob->rhs)
+    {
+        pdhcg_prob->constraint_upper_bound = (double *)safe_malloc(reduced_prob->m * sizeof(double));
+        memcpy(pdhcg_prob->constraint_upper_bound, reduced_prob->rhs, reduced_prob->m * sizeof(double));
+    }
+    if (reduced_prob->lbs)
+    {
+        pdhcg_prob->variable_lower_bound = (double *)safe_malloc(reduced_prob->n * sizeof(double));
+        memcpy(pdhcg_prob->variable_lower_bound, reduced_prob->lbs, reduced_prob->n * sizeof(double));
+    }
+    if (reduced_prob->ubs)
+    {
+        pdhcg_prob->variable_upper_bound = (double *)safe_malloc(reduced_prob->n * sizeof(double));
+        memcpy(pdhcg_prob->variable_upper_bound, reduced_prob->ubs, reduced_prob->n * sizeof(double));
+    }
 
     if (reduced_prob->nnz > 0 && reduced_prob->Ap)
     {
         pdhcg_prob->constraint_matrix = (CsrComponent *)safe_calloc_wrapper(1, sizeof(CsrComponent));
-        pdhcg_prob->constraint_matrix->row_ptr = reduced_prob->Ap;
-        pdhcg_prob->constraint_matrix->col_ind = reduced_prob->Ai;
-        pdhcg_prob->constraint_matrix->val = reduced_prob->Ax;
+        /* Copy PSQP's matrix data to avoid use-after-free when presolver is freed */
+        pdhcg_prob->constraint_matrix->row_ptr = (int *)safe_malloc((reduced_prob->m + 1) * sizeof(int));
+        memcpy(pdhcg_prob->constraint_matrix->row_ptr, reduced_prob->Ap, (reduced_prob->m + 1) * sizeof(int));
+        pdhcg_prob->constraint_matrix->col_ind = (int *)safe_malloc(reduced_prob->nnz * sizeof(int));
+        memcpy(pdhcg_prob->constraint_matrix->col_ind, reduced_prob->Ai, reduced_prob->nnz * sizeof(int));
+        pdhcg_prob->constraint_matrix->val = (double *)safe_malloc(reduced_prob->nnz * sizeof(double));
+        memcpy(pdhcg_prob->constraint_matrix->val, reduced_prob->Ax, reduced_prob->nnz * sizeof(double));
     }
 
     if (reduced_prob->has_quadratic && reduced_prob->Pnnz > 0 && reduced_prob->Pp)
     {
         pdhcg_prob->objective_sparse_matrix = (CsrComponent *)safe_calloc_wrapper(1, sizeof(CsrComponent));
-        pdhcg_prob->objective_sparse_matrix->row_ptr = reduced_prob->Pp;
-        pdhcg_prob->objective_sparse_matrix->col_ind = reduced_prob->Pi;
-        pdhcg_prob->objective_sparse_matrix->val = reduced_prob->Px;
+        /* Copy PSQP's matrix data to avoid use-after-free when presolver is freed */
+        pdhcg_prob->objective_sparse_matrix->row_ptr = (int *)safe_malloc((reduced_prob->n + 1) * sizeof(int));
+        memcpy(pdhcg_prob->objective_sparse_matrix->row_ptr, reduced_prob->Pp, (reduced_prob->n + 1) * sizeof(int));
+        pdhcg_prob->objective_sparse_matrix->col_ind = (int *)safe_malloc(reduced_prob->Pnnz * sizeof(int));
+        memcpy(pdhcg_prob->objective_sparse_matrix->col_ind, reduced_prob->Pi, reduced_prob->Pnnz * sizeof(int));
+        pdhcg_prob->objective_sparse_matrix->val = (double *)safe_malloc(reduced_prob->Pnnz * sizeof(double));
+        memcpy(pdhcg_prob->objective_sparse_matrix->val, reduced_prob->Px, reduced_prob->Pnnz * sizeof(double));
         pdhcg_prob->objective_sparse_matrix_num_nonzeros = (int)reduced_prob->Pnnz;
     }
 
@@ -89,8 +120,25 @@ static void free_converted_problem(qp_problem_t *prob)
 {
     if (!prob)
         return;
-    free(prob->constraint_matrix);
-    free(prob->objective_sparse_matrix);
+    free(prob->objective_vector);
+    free(prob->constraint_lower_bound);
+    free(prob->constraint_upper_bound);
+    free(prob->variable_lower_bound);
+    free(prob->variable_upper_bound);
+    if (prob->constraint_matrix)
+    {
+        free(prob->constraint_matrix->row_ptr);
+        free(prob->constraint_matrix->col_ind);
+        free(prob->constraint_matrix->val);
+        free(prob->constraint_matrix);
+    }
+    if (prob->objective_sparse_matrix)
+    {
+        free(prob->objective_sparse_matrix->row_ptr);
+        free(prob->objective_sparse_matrix->col_ind);
+        free(prob->objective_sparse_matrix->val);
+        free(prob->objective_sparse_matrix);
+    }
     free(prob->objective_lowrank_matrix);
     free(prob);
 }
@@ -225,7 +273,12 @@ pdhcg_presolve_info_t *pdhcg_presolve(const qp_problem_t *original_prob, const p
         }
     }
 
-    if (status & INFEASIBLE || status & UNBNDORINFEAS || presolver->reduced_prob->n == 0)
+    // Check if problem was solved during presolve (infeasible, unbounded, or all vars fixed)
+    // Note: reduced_prob can be NULL if presolve detected infeasibility early
+    bool presolver_solved = (status & INFEASIBLE) || (status & UNBNDORINFEAS) ||
+        (presolver->reduced_prob && presolver->reduced_prob->n == 0);
+
+    if (presolver_solved)
     {
         info->problem_solved_during_presolve = true;
         info->reduced_problem = NULL;
@@ -251,9 +304,20 @@ pdhcg_result_t *pdhcg_create_result_from_presolve(const pdhcg_presolve_info_t *i
     result->num_variables = original_prob->num_variables;
     result->num_constraints = original_prob->num_constraints;
     result->num_nonzeros = original_prob->constraint_matrix_num_nonzeros;
-    result->num_reduced_variables = (int)presolver->reduced_prob->n;
-    result->num_reduced_constraints = (int)presolver->reduced_prob->m;
-    result->num_reduced_nonzeros = (int)presolver->reduced_prob->nnz;
+
+    // Safely access reduced_prob - it may be NULL if presolve detected infeasibility
+    if (presolver->reduced_prob)
+    {
+        result->num_reduced_variables = (int)presolver->reduced_prob->n;
+        result->num_reduced_constraints = (int)presolver->reduced_prob->m;
+        result->num_reduced_nonzeros = (int)presolver->reduced_prob->nnz;
+    }
+    else
+    {
+        result->num_reduced_variables = 0;
+        result->num_reduced_constraints = 0;
+        result->num_reduced_nonzeros = 0;
+    }
     result->presolve_status = info->presolve_status;
     result->presolve_time = info->presolve_time;
 
@@ -265,7 +329,7 @@ pdhcg_result_t *pdhcg_create_result_from_presolve(const pdhcg_presolve_info_t *i
     {
         result->termination_reason = TERMINATION_REASON_INFEASIBLE_OR_UNBOUNDED;
     }
-    else if (presolver->reduced_prob->n == 0)
+    else if (presolver->reduced_prob && presolver->reduced_prob->n == 0)
     {
         result->termination_reason = TERMINATION_REASON_OPTIMAL;
     }
@@ -286,7 +350,8 @@ pdhcg_result_t *pdhcg_create_result_from_presolve(const pdhcg_presolve_info_t *i
 
     // If presolve solved the problem directly, copy solution from presolver->sol
     // This happens when reduced problem has 0 variables (n == 0)
-    if (presolver->reduced_prob->n == 0 && presolver->sol)
+    // Note: reduced_prob may be NULL if presolve detected infeasibility
+    if (presolver->reduced_prob && presolver->reduced_prob->n == 0 && presolver->sol)
     {
         if (result->primal_solution && presolver->sol->x)
         {
@@ -346,6 +411,21 @@ void pdhcg_postsolve(const pdhcg_presolve_info_t *info, pdhcg_result_t *result, 
     result->dual_solution = dual_sol;
     result->reduced_cost = reduced_cost;
 
+    // When n == 0, solution was already recovered in pdhcg_presolve
+    // Skip all postsolve processing to avoid overwriting correct values
+    // Note: reduced_prob may be NULL if presolve detected infeasibility
+    if (presolver->reduced_prob && presolver->reduced_prob->n == 0)
+    {
+        // Solution is already in result->primal_solution from pdhcg_create_result_from_presolve
+        // Just update the metadata
+        result->num_reduced_variables = (int)presolver->reduced_prob->n;
+        result->num_reduced_constraints = (int)presolver->reduced_prob->m;
+        result->num_reduced_nonzeros = (int)presolver->reduced_prob->nnz;
+        result->presolve_status = info->presolve_status;
+        result->presolve_time = info->presolve_time;
+        return;
+    }
+
     postsolve(presolver, result->primal_solution, result->dual_solution, result->reduced_cost);
 
     if (presolver->sol)
@@ -355,9 +435,19 @@ void pdhcg_postsolve(const pdhcg_presolve_info_t *info, pdhcg_result_t *result, 
         memcpy(result->reduced_cost, presolver->sol->z, original_prob->num_variables * sizeof(double));
     }
 
-    result->num_reduced_variables = (int)presolver->reduced_prob->n;
-    result->num_reduced_constraints = (int)presolver->reduced_prob->m;
-    result->num_reduced_nonzeros = (int)presolver->reduced_prob->nnz;
+    // Safely access reduced_prob - it may be NULL if presolve detected infeasibility
+    if (presolver->reduced_prob)
+    {
+        result->num_reduced_variables = (int)presolver->reduced_prob->n;
+        result->num_reduced_constraints = (int)presolver->reduced_prob->m;
+        result->num_reduced_nonzeros = (int)presolver->reduced_prob->nnz;
+    }
+    else
+    {
+        result->num_reduced_variables = 0;
+        result->num_reduced_constraints = 0;
+        result->num_reduced_nonzeros = 0;
+    }
     result->presolve_status = info->presolve_status;
     result->presolve_time = info->presolve_time;
 
