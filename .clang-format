@@ -1,32 +1,46 @@
 BasedOnStyle: LLVM
-IndentWidth: 2
-TabWidth: 2
+
+IndentWidth: 4
+TabWidth: 4
 UseTab: Never
-ColumnLimit: 100
-BreakBeforeBraces: Attach
-AllowShortIfOnASingleLine: false
-AllowShortLoopsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: Empty
-SortIncludes: true
-IndentCaseLabels: true
-AccessModifierOffset: -2
+
+ColumnLimit: 120
+
+BreakBeforeBraces: Allman
+
 PointerAlignment: Right
-ReferenceAlignment: Right
-SpaceAfterCStyleCast: false
-SpacesInParentheses: false
-SpacesInSquareBrackets: false
-SpacesInAngles: false
-SpaceBeforeAssignmentOperators: true
-SpaceBeforeParens: ControlStatements
-MaxEmptyLinesToKeep: 1
-KeepEmptyLinesAtTheStartOfBlocks: false
-NamespaceIndentation: None
-FixNamespaceComments: true
-BinPackParameters: true
-BinPackArguments: true
-ExperimentalAutoDetectBinPacking: false
-AllowAllParametersOfDeclarationOnASingleLine: false
-IndentWrappedFunctionNames: false
 DerivePointerAlignment: false
-AlwaysBreakTemplateDeclarations: Yes
-Standard: Latest
+
+BinPackParameters: false
+BinPackArguments: false
+
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+
+IndentCaseLabels: true
+InsertNewlineAtEOF: true
+
+SortIncludes: true
+
+ReflowComments: false
+AlignOperands: false
+
+StatementMacros:
+  - ASSERT
+  - CHECK
+  - REQUIRE
+  - ENSURE
+  - EXPECT
+  - CUDA_CHECK
+  - CUBLAS_CHECK
+  - CUSPARSE_CHECK
+
+AttributeMacros:
+  - __global__
+  - __device__
+  - __host__
+  - __shared__
+  - __constant__
+  - __managed__
+  - __launch_bounds__

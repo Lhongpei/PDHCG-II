@@ -8,15 +8,22 @@ set(PYBIND_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/_core_bindings.cpp)
 # build the pybind11 module
 pybind11_add_module(_pdhcg_core MODULE ${PYBIND_SOURCES})
 
-target_link_libraries(_pdhcg_core PRIVATE 
+target_link_libraries(_pdhcg_core PRIVATE
     pdhcg_core
 )
 
 # set rpath so that the module can find the shared libraries at runtime
+# Include PSQP build directory in RPATH if PSQP is available
+if(TARGET PSQP)
+    set(_PDHCG_PYTHON_RPATH "$ORIGIN/../lib;${CMAKE_BINARY_DIR}/_deps/psqp-build")
+else()
+    set(_PDHCG_PYTHON_RPATH "$ORIGIN/../lib")
+endif()
+
 set_target_properties(_pdhcg_core PROPERTIES
   BUILD_WITH_INSTALL_RPATH TRUE
-  INSTALL_RPATH "$ORIGIN/../lib"
-  BUILD_RPATH   "$ORIGIN/../lib"
+  INSTALL_RPATH "${_PDHCG_PYTHON_RPATH}"
+  BUILD_RPATH   "${_PDHCG_PYTHON_RPATH}"
 )
 
 # better error messages from pybind11

@@ -91,6 +91,20 @@ class Model:
     subject to    l_c <= A x <= u_c
                   l_v <= x <= u_v
     ```
+
+    Solver Parameters:
+        Parameters can be set via the `Params` attribute or `setParam()` method.
+        Common parameters include:
+
+        - TimeLimit: Time limit in seconds (default: 3600.0)
+        - IterationLimit: Maximum number of iterations (default: INT_MAX)
+        - OptimalityTol: Relative optimality tolerance (default: 1e-4)
+        - FeasibilityTol: Relative feasibility tolerance (default: 1e-4)
+        - Presolve: Enable/disable presolve (default: True)
+        - RuizIters: Number of Ruiz rescaling iterations (default: 10)
+        - LogLevel: Verbosity level 0-3 (default: 1)
+
+        Use `model.Params["Presolve"] = False` to disable presolve.
     """
 
     def __init__(

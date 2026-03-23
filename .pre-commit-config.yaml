@@ -22,14 +22,6 @@ repos:
         types_or: [c, c++, cuda]
         exclude: ^(build/|dist/|.git/)
 
-  # Spell checking
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.0
-    hooks:
-      - id: codespell
-        args: [--ignore-words=.codespell-ignore]
-        exclude: ^(build/|dist/|site/|.git/|.*\.svg$)
-
   # Trailing whitespace
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

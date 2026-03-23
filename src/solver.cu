@@ -19,6 +19,7 @@ limitations under the License.
 #include "pdhcg.h"
 #include "pdhg_core_op.h"
 #include "preconditioner.h"
+#include "presolve_wrapper.h"
 #include "solver.h"
 #include "solver_state.h"
 #include "utils.h"
@@ -30,87 +31,126 @@ limitations under the License.
 #include <stdio.h>
 #include <time.h>
 
-pdhcg_result_t *optimize(const pdhg_parameters_t *input_params,
-                         const qp_problem_t *original_problem) {
-  qp_problem_t *working_problem = deepcopy_problem(original_problem);
-  pdhg_parameters_t copyed_params = *input_params;
-  pdhg_parameters_t *params = &copyed_params;
-  print_initial_info(input_params, original_problem);
+pdhcg_result_t *optimize(const pdhg_parameters_t *input_params, const qp_problem_t *original_problem)
+{
+    pdhg_parameters_t copyed_params = *input_params;
+    pdhg_parameters_t *params = &copyed_params;
 
-  rescale_info_t *rescale_info = rescale_problem(params, working_problem);
-  pdhg_solver_state_t *state =
-      initialize_solver_state(params, working_problem, rescale_info);
+    print_initial_info(input_params, original_problem);
 
-  if (state->quadratic_objective_term->nonconvexity < 0) {
-    state->inner_solver->iteration_limit = 1;
-  }
+    pdhcg_presolve_info_t *presolve_info = NULL;
+    const qp_problem_t *working_problem = original_problem;
 
-  rescale_info_free(rescale_info);
-  initialize_step_size_and_primal_weight(state, params);
-  clock_t start_time = clock();
-  bool do_restart = false;
-  while (state->total_count < params->termination_criteria.iteration_limit) {
-    if ((state->is_this_major_iteration || state->total_count == 0) ||
-        (state->total_count % get_print_frequency(state->total_count) == 0)) {
-      compute_residual(state, params->optimality_norm);
-      if (state->is_this_major_iteration &&
-          state->total_count < 3 * params->termination_evaluation_frequency) {
-        compute_infeasibility_information(state);
-      }
+    if (params->presolve && pdhcg_presolve_available())
+    {
+        presolve_info = pdhcg_presolve(original_problem, params);
+        if (presolve_info)
+        {
+            if (presolve_info->problem_solved_during_presolve)
+            {
+                pdhcg_result_t *result = pdhcg_create_result_from_presolve(presolve_info, original_problem);
+                if (result)
+                {
+                    pdhg_final_log(result, params);
+                }
+                pdhcg_presolve_info_free(presolve_info);
+                return result;
+            }
 
-      state->cumulative_time_sec =
-          (double)(clock() - start_time) / CLOCKS_PER_SEC;
-
-      check_termination_criteria(state, &params->termination_criteria);
-      display_iteration_stats(state, params->verbose);
-      if (state->termination_reason != TERMINATION_REASON_UNSPECIFIED) {
-        break;
-      }
+            if (presolve_info->reduced_problem)
+            {
+                working_problem = presolve_info->reduced_problem;
+            }
+        }
     }
 
-    if ((state->is_this_major_iteration || state->total_count == 0)) {
-      do_restart =
-          should_do_adaptive_restart(state, &params->restart_params,
-                                     params->termination_evaluation_frequency);
-      if (do_restart)
-        perform_restart(state, params);
+    qp_problem_t *working_problem_copy = deepcopy_problem(working_problem);
+
+    rescale_info_t *rescale_info = rescale_problem(params, working_problem_copy);
+    pdhg_solver_state_t *state = initialize_solver_state(params, working_problem_copy, rescale_info);
+
+    if (state->quadratic_objective_term->nonconvexity < 0)
+    {
+        state->inner_solver->iteration_limit = 1;
     }
 
-    state->is_this_major_iteration =
-        ((state->total_count + 1) % params->termination_evaluation_frequency) ==
-        0;
+    qp_problem_free(working_problem_copy);
+    rescale_info_free(rescale_info);
+    initialize_step_size_and_primal_weight(state, params);
+    clock_t start_time = clock();
+    bool do_restart = false;
 
-    pdhg_update(state);
+    while (state->total_count < params->termination_criteria.iteration_limit)
+    {
+        if ((state->is_this_major_iteration || state->total_count == 0) ||
+            (state->total_count % get_print_frequency(state->total_count) == 0))
+        {
+            compute_residual(state, params->optimality_norm);
+            if (state->is_this_major_iteration && state->total_count < 3 * params->termination_evaluation_frequency)
+            {
+                compute_infeasibility_information(state);
+            }
 
-    if (state->is_this_major_iteration || do_restart) {
-      compute_fixed_point_error(state);
-      if (do_restart) {
-        state->initial_fixed_point_error = state->fixed_point_error;
-        do_restart = false;
-      }
+            state->cumulative_time_sec = (double)(clock() - start_time) / CLOCKS_PER_SEC;
+
+            check_termination_criteria(state, &params->termination_criteria);
+            display_iteration_stats(state, params->verbose);
+            if (state->termination_reason != TERMINATION_REASON_UNSPECIFIED)
+            {
+                break;
+            }
+        }
+
+        if ((state->is_this_major_iteration || state->total_count == 0))
+        {
+            do_restart =
+                should_do_adaptive_restart(state, &params->restart_params, params->termination_evaluation_frequency);
+            if (do_restart)
+                perform_restart(state, params);
+        }
+
+        state->is_this_major_iteration = ((state->total_count + 1) % params->termination_evaluation_frequency) == 0;
+
+        pdhg_update(state);
+
+        if (state->is_this_major_iteration || do_restart)
+        {
+            compute_fixed_point_error(state);
+            if (do_restart)
+            {
+                state->initial_fixed_point_error = state->fixed_point_error;
+                do_restart = false;
+            }
+        }
+        halpern_update(state, params->reflection_coefficient);
+
+        state->inner_count++;
+        state->total_count++;
     }
-    halpern_update(state, params->reflection_coefficient);
 
-    state->inner_count++;
-    state->total_count++;
-  }
+    if (state->termination_reason == TERMINATION_REASON_UNSPECIFIED)
+    {
+        state->termination_reason = TERMINATION_REASON_ITERATION_LIMIT;
+        compute_residual(state, params->optimality_norm);
+        display_iteration_stats(state, params->verbose);
+    }
 
-  if (state->termination_reason == TERMINATION_REASON_UNSPECIFIED) {
-    state->termination_reason = TERMINATION_REASON_ITERATION_LIMIT;
-    compute_residual(state, params->optimality_norm);
-    display_iteration_stats(state, params->verbose);
-  }
+    // if (params->feasibility_polishing &&
+    //     state->termination_reason != TERMINATION_REASON_DUAL_INFEASIBLE &&
+    //     state->termination_reason != TERMINATION_REASON_PRIMAL_INFEASIBLE) {
+    //   feasibility_polish(params, state);
+    // }
 
-  // if (params->feasibility_polishing &&
-  //     state->termination_reason != TERMINATION_REASON_DUAL_INFEASIBLE &&
-  //     state->termination_reason != TERMINATION_REASON_PRIMAL_INFEASIBLE) {
-  //   feasibility_polish(params, state);
-  // }
+    pdhcg_result_t *result = create_result_from_state(state, original_problem);
 
-  pdhcg_result_t *result = create_result_from_state(state, original_problem);
+    if (presolve_info && presolve_info->reduced_problem)
+    {
+        pdhcg_postsolve(presolve_info, result, original_problem);
+    }
 
-  pdhg_final_log(result, params);
-  pdhg_solver_state_free(state);
-  qp_problem_free(working_problem);
-  return result;
+    pdhg_final_log(result, params);
+    pdhg_solver_state_free(state);
+    pdhcg_presolve_info_free(presolve_info);
+    // CUDA_CHECK(cudaGetLastError());
+    return result;
 }
