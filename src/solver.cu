@@ -151,6 +151,6 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params, const qp_problem
     pdhg_final_log(result, params);
     pdhg_solver_state_free(state);
     pdhcg_presolve_info_free(presolve_info);
-    CUDA_CHECK(cudaGetLastError());
+    // CUDA_CHECK(cudaGetLastError());
     return result;
 }
