@@ -135,16 +135,8 @@ pdhcg_presolve_info_t *pdhcg_presolve(const qp_problem_t *original_prob, const p
     info->settings = default_settings();
     ((Settings *)info->settings)->verbose = false;
 
-    bool has_q =
-        (original_prob->objective_sparse_matrix != NULL && original_prob->objective_sparse_matrix_num_nonzeros > 0);
-    bool has_r = (original_prob->objective_lowrank_matrix != NULL &&
-                  original_prob->objective_lowrank_matrix_num_nonzeros > 0 && original_prob->num_rank_lowrank_obj > 0);
-
-    // if (has_q || has_r)
-    // {
-    //     ((Settings *)info->settings)->dton_eq = false;       // 禁止双变量代换
-    //     ((Settings *)info->settings)->parallel_cols = false; // 禁止平行列合并
-    // }
+    bool has_q = (original_prob->objective_sparse_matrix != NULL);
+    bool has_r = (original_prob->objective_lowrank_matrix != NULL);
 
     Presolver *presolver = NULL;
     size_t m = (size_t)original_prob->num_constraints;
@@ -153,32 +145,34 @@ pdhcg_presolve_info_t *pdhcg_presolve(const qp_problem_t *original_prob, const p
 
     if (has_r)
     {
-        size_t Qnnz = has_q ? (size_t)original_prob->objective_sparse_matrix_num_nonzeros : 0;
+        size_t Qnnz = (has_q && original_prob->objective_sparse_matrix)
+            ? (size_t)original_prob->objective_sparse_matrix_num_nonzeros
+            : 0;
         size_t Rnnz = (size_t)original_prob->objective_lowrank_matrix_num_nonzeros;
-        size_t k = (size_t)original_prob->num_rank_lowrank_obj;
+        size_t k_rank = (size_t)original_prob->num_rank_lowrank_obj;
 
-        presolver =
-            new_qp_presolver_qr(original_prob->constraint_matrix ? original_prob->constraint_matrix->val : NULL,
-                                original_prob->constraint_matrix ? original_prob->constraint_matrix->col_ind : NULL,
-                                original_prob->constraint_matrix ? original_prob->constraint_matrix->row_ptr : NULL,
-                                m,
-                                n,
-                                nnz,
-                                original_prob->constraint_lower_bound,
-                                original_prob->constraint_upper_bound,
-                                original_prob->variable_lower_bound,
-                                original_prob->variable_upper_bound,
-                                original_prob->objective_vector,
-                                has_q ? original_prob->objective_sparse_matrix->val : NULL,
-                                has_q ? original_prob->objective_sparse_matrix->col_ind : NULL,
-                                has_q ? original_prob->objective_sparse_matrix->row_ptr : NULL,
-                                Qnnz,
-                                original_prob->objective_lowrank_matrix->val,
-                                original_prob->objective_lowrank_matrix->col_ind,
-                                original_prob->objective_lowrank_matrix->row_ptr,
-                                Rnnz,
-                                k,
-                                info->settings);
+        presolver = new_qp_presolver_qr(
+            original_prob->constraint_matrix ? original_prob->constraint_matrix->val : NULL,
+            original_prob->constraint_matrix ? original_prob->constraint_matrix->col_ind : NULL,
+            original_prob->constraint_matrix ? original_prob->constraint_matrix->row_ptr : NULL,
+            m,
+            n,
+            nnz,
+            original_prob->constraint_lower_bound,
+            original_prob->constraint_upper_bound,
+            original_prob->variable_lower_bound,
+            original_prob->variable_upper_bound,
+            original_prob->objective_vector,
+            (has_q && original_prob->objective_sparse_matrix) ? original_prob->objective_sparse_matrix->val : NULL,
+            (has_q && original_prob->objective_sparse_matrix) ? original_prob->objective_sparse_matrix->col_ind : NULL,
+            (has_q && original_prob->objective_sparse_matrix) ? original_prob->objective_sparse_matrix->row_ptr : NULL,
+            Qnnz,
+            original_prob->objective_lowrank_matrix->val,
+            original_prob->objective_lowrank_matrix->col_ind,
+            original_prob->objective_lowrank_matrix->row_ptr,
+            Rnnz,
+            k_rank,
+            info->settings);
     }
     else if (has_q)
     {

@@ -577,7 +577,8 @@ void set_default_parameters(pdhg_parameters_t *params)
     params->termination_evaluation_frequency = 200;
     params->feasibility_polishing = false;
     params->reflection_coefficient = 1.0;
-    params->presolve = true;
+    //TODO: Open Presolve When we verify PSQP
+    params->presolve = false;
 
     params->sv_max_iter = 5000;
     params->sv_tol = 1e-4;
