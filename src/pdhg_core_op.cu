@@ -357,6 +357,10 @@ __global__ void primal_gradient_descent_kernel_major(const double *dual_product,
         reflected_primal[i] = 2.0 * next_primal_sol - current_primal_sol;
     }
 }
+__global__ void compute_bb_alpha_safeguard_kernel(const double *d_norm_gtg, const double *d_tmp, double *d_alpha)
+{
+    *d_alpha = (*d_norm_gtg * *d_norm_gtg) / *d_tmp;
+}
 
 __global__ void primal_gradient_descent_kernel_bb_init(const double *dual_product,
                                                        double *gradient,
@@ -409,12 +413,13 @@ __global__ void primal_bb_update_direction_kernel(double *pdhg_primal_solution,
                                                   double *direction,
                                                   const double *var_lb,
                                                   const double *var_ub,
-                                                  const double alpha,
+                                                  const double *d_alpha,
                                                   const int n_vars)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n_vars)
     {
+        double alpha = *d_alpha;
         double cur_sol = pdhg_primal_solution[i];
         double next_sol = cur_sol - alpha * gradient[i];
         next_sol = fmax(var_lb[i], fmin(next_sol, var_ub[i]));
@@ -441,9 +446,12 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
 {
     double inv_step_size = 1.0 / step_size;
     int inner_solver_iter = 1;
-    double norm_gtg;
-    double tmp;
-    double alpha = 1.0 / inv_step_size;
+    double initial_alpha = 1.0 / inv_step_size;
+
+    double *d_norm_gtg = state->inner_solver->bb_step_size->scalar_buffer;
+    double *d_tmp = state->inner_solver->bb_step_size->scalar_buffer + 1;
+    double *d_alpha = state->inner_solver->bb_step_size->scalar_buffer + 2;
+
     update_obj_product(state, state->current_primal_solution);
     primal_gradient_descent_kernel_bb_init<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
         state->dual_product,
@@ -455,15 +463,27 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
         state->quadratic_objective_term->primal_obj_product,
         state->variable_lower_bound,
         state->variable_upper_bound,
-        alpha,
+        initial_alpha,
         state->num_variables);
+
+    cublasSetPointerMode(state->blas_handle, CUBLAS_POINTER_MODE_DEVICE);
+
+    int check_frequency = 1;
+    double h_norm_gtg = 0.0;
+
     while (inner_solver_iter < state->inner_solver->iteration_limit)
     {
 
         CUBLAS_CHECK(cublasDnrm2_v2_64(
-            state->blas_handle, state->num_variables, state->inner_solver->bb_step_size->direction, 1, &norm_gtg));
-        if (norm_gtg <= state->inner_solver->tol)
-            break;
+            state->blas_handle, state->num_variables, state->inner_solver->bb_step_size->direction, 1, d_norm_gtg));
+
+        if (inner_solver_iter == 1 || inner_solver_iter % check_frequency == 0)
+        {
+            cudaMemcpy(&h_norm_gtg, d_norm_gtg, sizeof(double), cudaMemcpyDeviceToHost);
+            if (h_norm_gtg <= state->inner_solver->tol)
+                break;
+        }
+
         update_obj_product(state, state->pdhg_primal_solution);
         primal_bb_update_gradient_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
             state->pdhg_primal_solution,
@@ -481,18 +501,22 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
                                 1,
                                 state->inner_solver->primal_buffer,
                                 1,
-                                &tmp));
-        alpha = norm_gtg * norm_gtg / tmp;
+                                d_tmp));
+
+        compute_bb_alpha_safeguard_kernel<<<1, 1>>>(d_norm_gtg, d_tmp, d_alpha);
         primal_bb_update_direction_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
             state->pdhg_primal_solution,
             state->inner_solver->bb_step_size->gradient,
             state->inner_solver->bb_step_size->direction,
             state->variable_lower_bound,
             state->variable_upper_bound,
-            alpha,
+            d_alpha,
             state->num_variables);
         inner_solver_iter++;
     }
+
+    cublasSetPointerMode(state->blas_handle, CUBLAS_POINTER_MODE_HOST);
+
     primal_bb_final_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(state->current_primal_solution,
                                                                             state->pdhg_primal_solution,
                                                                             state->reflected_primal_solution,

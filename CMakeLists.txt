@@ -51,6 +51,9 @@ include(CMakeDependentOption)
 option(PDHCG_BUILD_STATIC_LIB "Build the PDHCG static library" ON)
 option(PDHCG_BUILD_SHARED_LIB "Build the PDHCG shared library" ON)
 
+# PSQP Presolver
+option(PDHCG_USE_PSQP "Download and use PSQP for presolving" OFF)
+
 # format: cmake_dependent_option(OPTION "docstring" DEFAULT_VALUE "DEPENDENCY_VARIABLE" FORCE_OFF_VALUE)
 cmake_dependent_option(PDHCG_BUILD_PYTHON "Build the PDHCG Python bindings" OFF
                        "PDHCG_BUILD_STATIC_LIB" OFF)
@@ -79,36 +82,39 @@ include(FetchContent)
 # -----------------------------------------------------------------------------
 # PSQP (QP Presolver) Integration
 # -----------------------------------------------------------------------------
-# Use FetchContent to automatically download PSQP from git repository
-set(PSQP_VERSION_TAG "main" CACHE STRING "PSQP git tag/branch to use")
+if(PDHCG_USE_PSQP)
+    # Use FetchContent to automatically download PSQP from git repository
+    set(PSQP_VERSION_TAG "main" CACHE STRING "PSQP git tag/branch to use")
 
-FetchContent_Declare(
-  psqp
-  GIT_REPOSITORY https://github.com/Lhongpei/PSQP.git
-  GIT_TAG        ${PSQP_VERSION_TAG}
-)
-
-# Check if PSQP has already been populated
-FetchContent_GetProperties(psqp)
-if(NOT psqp_POPULATED)
-    message(STATUS "Fetching PSQP from https://github.com/Lhongpei/PSQP.git (${PSQP_VERSION_TAG})")
-    FetchContent_MakeAvailable(psqp)
-    message(STATUS "PSQP populated at: ${psqp_SOURCE_DIR}")
-endif()
-
-# Set up PSQP include directories
-if(TARGET PSQP)
-    target_include_directories(PSQP INTERFACE
-        $<BUILD_INTERFACE:${psqp_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${psqp_SOURCE_DIR}/include/PSQP>
+    FetchContent_Declare(
+      psqp
+      GIT_REPOSITORY https://github.com/Lhongpei/PSQP.git
+      GIT_TAG        ${PSQP_VERSION_TAG}
     )
-    message(STATUS "PSQP target configured successfully")
-else()
-    message(WARNING "PSQP target not found. Presolving features will be disabled.")
-endif()
 
-# Add version definition
-add_compile_definitions(PSQP_VERSION=\"${PSQP_VERSION_TAG}\")
+    # Check if PSQP has already been populated
+    FetchContent_GetProperties(psqp)
+    if(NOT psqp_POPULATED)
+        message(STATUS "Fetching PSQP from https://github.com/Lhongpei/PSQP.git (${PSQP_VERSION_TAG})")
+        FetchContent_MakeAvailable(psqp)
+        message(STATUS "PSQP populated at: ${psqp_SOURCE_DIR}")
+    endif()
+
+    # Set up PSQP include directories
+    if(TARGET PSQP)
+        target_include_directories(PSQP INTERFACE
+            $<BUILD_INTERFACE:${psqp_SOURCE_DIR}/include>
+            $<BUILD_INTERFACE:${psqp_SOURCE_DIR}/include/PSQP>
+        )
+        message(STATUS "PSQP target configured successfully")
+        # Add version definition
+        add_compile_definitions(PSQP_VERSION=\"${PSQP_VERSION_TAG}\")
+    else()
+        message(WARNING "PSQP target not found. Presolving features will be disabled.")
+    endif()
+else()
+    message(STATUS "PSQP integration disabled by user (PDHCG_USE_PSQP=OFF).")
+endif()
 
 # -----------------------------------------------------------------------------
 # SOURCE DISCOVERY & TARGET DEFINITION
@@ -135,8 +141,14 @@ set(CORE_LINK_LIBS PUBLIC
   CUDA::cublas
   CUDA::cusparse
   ZLIB::ZLIB
-  PSQP
 )
+
+if(PDHCG_USE_PSQP AND TARGET PSQP)
+    list(APPEND CORE_LINK_LIBS PUBLIC PSQP)
+    set(PDHCG_OPTIONAL_DEFINES "PSQP_AVAILABLE")
+else()
+    set(PDHCG_OPTIONAL_DEFINES "")
+endif()
 
 # -----------------------------------------------------------------------------
 # 1. Core STATIC Library (pdhcg_core)
@@ -150,8 +162,7 @@ if(PDHCG_BUILD_STATIC_LIB)
     target_link_libraries(pdhcg_core ${CORE_LINK_LIBS})
 
     # Add PSQP compile definition
-    target_compile_definitions(pdhcg_core PUBLIC PSQP_AVAILABLE)
-    message(STATUS "PDHCG: PSQP linked successfully")
+    target_compile_definitions(pdhcg_core PUBLIC ${PDHCG_OPTIONAL_DEFINES})
 
     set_target_properties(pdhcg_core PROPERTIES
       POSITION_INDEPENDENT_CODE ON
@@ -172,7 +183,7 @@ if(PDHCG_BUILD_SHARED_LIB)
     target_link_libraries(PDHCG_shared ${CORE_LINK_LIBS})
 
     # Add PSQP compile definition
-    target_compile_definitions(PDHCG_shared PUBLIC PSQP_AVAILABLE)
+    target_compile_definitions(PDHCG_shared PUBLIC ${PDHCG_OPTIONAL_DEFINES})
 
     # Shared library must resolve device symbols as it is a final link point
     set_target_properties(PDHCG_shared PROPERTIES

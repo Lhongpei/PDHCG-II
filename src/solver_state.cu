@@ -379,6 +379,7 @@ static void initialize_inner_solver(pdhg_solver_state_t *state, const pdhg_param
             state->inner_solver->bb_step_size = (bb_step_size_t *)safe_malloc(sizeof(bb_step_size_t));
             ALLOC_ZERO(state->inner_solver->bb_step_size->gradient, state->num_variables * sizeof(double));
             ALLOC_ZERO(state->inner_solver->bb_step_size->direction, state->num_variables * sizeof(double));
+            ALLOC_ZERO(state->inner_solver->bb_step_size->scalar_buffer, 3 * sizeof(double))
 
             state->inner_solver->iteration_limit = iteration_limit;
             state->inner_solver->tol = initial_tol;
