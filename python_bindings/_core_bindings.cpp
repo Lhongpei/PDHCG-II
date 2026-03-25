@@ -38,6 +38,7 @@ extern "C"
 
 void sigint_handler(int signum)
 {
+    (void)signum;
     g_pdhcg_cancel_request = 1;
 }
 
