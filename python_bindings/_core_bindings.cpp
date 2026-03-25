@@ -17,7 +17,9 @@ limitations under the License.
 
 #include <cstdint>
 #include <cstring>
+#include <cuda_runtime.h>
 #include <limits>
+#include <mutex>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -480,6 +482,9 @@ static py::dict solve_once(py::object Q,
                            py::object primal_start = py::none(),
                            py::object dual_start = py::none())
 {
+    static std::once_flag cuda_init_flag;
+    std::call_once(cuda_init_flag, []() { cudaFree(0); });
+
     PyMatrixView view_a, view_q, view_r;
     if (!A.is_none())
     {
