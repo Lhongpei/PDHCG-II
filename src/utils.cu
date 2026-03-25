@@ -19,6 +19,7 @@ limitations under the License.
 #include "utils.h"
 #include <math.h>
 #include <random>
+#include <signal.h>
 
 #ifndef PDHCG_VERSION
 #define PDHCG_VERSION "unknown"
@@ -438,6 +439,8 @@ const char *termination_reason_to_string(termination_reason_t reason)
             return "ITERATION_LIMIT";
         case TERMINATION_REASON_UNSPECIFIED:
             return "UNSPECIFIED";
+        case TERMINATION_REASON_USER_INTERRUPT:
+            return "USER_INTERRUPT";
         case TERMINATION_REASON_FEAS_POLISH_SUCCESS:
             return "FEAS_POLISH_SUCCESS";
         default:
@@ -505,8 +508,16 @@ bool dual_infeasibility_criteria_met(const pdhg_solver_state_t *state, double ep
     return state->max_primal_ray_infeasibility / (-state->primal_ray_linear_objective) <= eps;
 }
 
+extern volatile sig_atomic_t g_pdhcg_cancel_request;
+
 void check_termination_criteria(pdhg_solver_state_t *solver_state, const termination_criteria_t *criteria)
 {
+    if (g_pdhcg_cancel_request)
+    {
+        solver_state->termination_reason = TERMINATION_REASON_USER_INTERRUPT;
+        return;
+    }
+
     if (optimality_criteria_met(solver_state, criteria->eps_optimal_relative, criteria->eps_feasible_relative))
     {
         solver_state->termination_reason = TERMINATION_REASON_OPTIMAL;

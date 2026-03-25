@@ -15,6 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "pdhcg.h"
+#include <csignal>
 #include <cstdint>
 #include <cstring>
 #include <cuda_runtime.h>
@@ -27,9 +29,17 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "pdhcg.h"
-
 namespace py = pybind11;
+
+extern "C"
+{
+    extern volatile sig_atomic_t g_pdhcg_cancel_request;
+}
+
+void sigint_handler(int signum)
+{
+    g_pdhcg_cancel_request = 1;
+}
 
 // keepalive for numpy arrays
 struct MatrixKeepalive
@@ -566,10 +576,26 @@ static py::dict solve_once(py::object Q,
     parse_params_from_python(params, &local_params);
     // solve (release GIL during compute)
     pdhcg_result_t *res = nullptr;
+    g_pdhcg_cancel_request = 0;
+    void (*old_sigint_handler)(int) = std::signal(SIGINT, sigint_handler);
+
     {
         py::gil_scoped_release release;
         res = solve_qp_problem(prob, &local_params);
     }
+
+    std::signal(SIGINT, old_sigint_handler);
+
+    // Note: A user interrupt will only terminate the optimization process, without killing the Python instance.
+    // if (g_pdhcg_cancel_request) {
+    //     PyErr_SetInterrupt();
+    //     if (PyErr_CheckSignals() != 0) {
+    //         qp_problem_free(prob);
+    //         if (res) pdhcg_result_free(res);
+    //         throw py::error_already_set();
+    //     }
+    // }
+
     qp_problem_free(prob);
     if (!res)
     {

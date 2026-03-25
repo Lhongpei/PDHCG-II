@@ -19,9 +19,12 @@ limitations under the License.
 #include "solver.h"
 #include "utils.h"
 #include <math.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+volatile sig_atomic_t g_pdhcg_cancel_request = 0;
 
 // create an qp_problem_t from a matrix
 qp_problem_t *create_qp_problem(const double *objective_c,
