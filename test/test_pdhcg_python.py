@@ -103,35 +103,35 @@ class TestPDHCGInterface(unittest.TestCase):
         self.assertAlmostEqual(m.X[0], 0.5, places=4, msg=f"X[0] mismatch! {debug_msg}")
         self.assertAlmostEqual(m.X[1], 0.5, places=4, msg=f"X[1] mismatch! {debug_msg}")
 
-    # def test_qp_no_constraints_A(self):
-    #     """
-    #     Test QP without matrix A (Box constrained or Unconstrained).
-    #     """
-    #     print("\n[Test] QP without Constraint Matrix A")
+    def test_qp_no_constraints_A(self):
+        """
+        Test QP without matrix A (Box constrained or Unconstrained).
+        """
+        print("\n[Test] QP without Constraint Matrix A")
 
-    #     Q = sp.diags([2.0, 2.0], format="csc")
-    #     c = np.array([-2.0, -2.0])
+        Q = sp.diags([2.0, 2.0], format="csc")
+        c = np.array([-2.0, -2.0])
 
-    #     m = Model(
-    #         objective_vector=c,
-    #         objective_matrix=Q,
-    #         constraint_matrix=None,
-    #         constraint_lower_bound=None,
-    #         constraint_upper_bound=None,
-    #         variable_lower_bound=None,
-    #         variable_upper_bound=None,
-    #     )
+        m = Model(
+            objective_vector=c,
+            objective_matrix=Q,
+            constraint_matrix=None,
+            constraint_lower_bound=None,
+            constraint_upper_bound=None,
+            variable_lower_bound=None,
+            variable_upper_bound=None,
+        )
 
-    #     m.setParams(**self.default_params)
-    #     m.optimize()
+        m.setParams(**self.default_params)
+        m.optimize()
 
-    #     debug_msg = self._get_debug_msg(m)
-    #     self.assertEqual(m.Status, "OPTIMAL", msg=f"Status mismatch! {debug_msg}")
-    #     self.assertAlmostEqual(m.ObjVal, -2.0, places=4, msg=f"ObjVal mismatch! {debug_msg}")
+        debug_msg = self._get_debug_msg(m)
+        self.assertEqual(m.Status, "OPTIMAL", msg=f"Status mismatch! {debug_msg}")
+        self.assertAlmostEqual(m.ObjVal, -2.0, places=4, msg=f"ObjVal mismatch! {debug_msg}")
 
-    #     self.assertIsNotNone(m.X, msg=f"Solution X is None! {debug_msg}")
-    #     self.assertAlmostEqual(m.X[0], 1.0, places=4, msg=f"X[0] mismatch! {debug_msg}")
-    #     self.assertAlmostEqual(m.X[1], 1.0, places=4, msg=f"X[1] mismatch! {debug_msg}")
+        self.assertIsNotNone(m.X, msg=f"Solution X is None! {debug_msg}")
+        self.assertAlmostEqual(m.X[0], 1.0, places=4, msg=f"X[0] mismatch! {debug_msg}")
+        self.assertAlmostEqual(m.X[1], 1.0, places=4, msg=f"X[1] mismatch! {debug_msg}")
 
     def test_qp_a_simple_minimization(self):
         """

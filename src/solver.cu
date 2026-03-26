@@ -40,6 +40,7 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params, const qp_problem
 
     pdhcg_presolve_info_t *presolve_info = NULL;
     const qp_problem_t *working_problem = original_problem;
+    bool working_problem_needs_free = false;
 
     if (params->presolve && pdhcg_presolve_available())
     {
@@ -64,17 +65,20 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params, const qp_problem
         }
     }
 
-    qp_problem_t *working_problem_copy = deepcopy_problem(working_problem);
+    if (working_problem->num_constraints == 0 || working_problem->constraint_matrix == NULL)
+    {
+        working_problem = create_problem_with_dummy_constraint(original_problem);
+        working_problem_needs_free = true;
+    }
 
-    rescale_info_t *rescale_info = rescale_problem(params, working_problem_copy);
-    pdhg_solver_state_t *state = initialize_solver_state(params, working_problem_copy, rescale_info);
+    rescale_info_t *rescale_info = rescale_problem(params, working_problem);
+    pdhg_solver_state_t *state = initialize_solver_state(params, working_problem, rescale_info);
 
     if (state->quadratic_objective_term->nonconvexity < 0)
     {
         state->inner_solver->iteration_limit = 1;
     }
 
-    qp_problem_free(working_problem_copy);
     rescale_info_free(rescale_info);
     initialize_step_size_and_primal_weight(state, params);
     clock_t start_time = clock();
@@ -147,10 +151,13 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params, const qp_problem
     {
         pdhcg_postsolve(presolve_info, result, original_problem);
     }
-
+    if (working_problem_needs_free)
+    {
+        qp_problem_free((qp_problem_t *)working_problem);
+    }
     pdhg_final_log(result, params);
     pdhg_solver_state_free(state);
     pdhcg_presolve_info_free(presolve_info);
-    // CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaGetLastError());
     return result;
 }

@@ -69,6 +69,51 @@ void *safe_realloc(void *ptr, size_t new_size)
     return tmp;
 }
 
+qp_problem_t *create_problem_with_dummy_constraint(const qp_problem_t *prob)
+{
+    if (prob == NULL)
+        return NULL;
+
+    qp_problem_t *new_prob = deepcopy_problem(prob);
+
+    new_prob->num_constraints = 1;
+    new_prob->constraint_matrix_num_nonzeros = 1;
+
+    if (new_prob->constraint_matrix == NULL)
+    {
+        new_prob->constraint_matrix = (CsrComponent *)malloc(sizeof(CsrComponent));
+    }
+
+    new_prob->constraint_matrix->row_ptr = (int *)malloc(2 * sizeof(int));
+    new_prob->constraint_matrix->row_ptr[0] = 0;
+    new_prob->constraint_matrix->row_ptr[1] = 1;
+
+    new_prob->constraint_matrix->col_ind = (int *)malloc(1 * sizeof(int));
+    new_prob->constraint_matrix->col_ind[0] = 0;
+
+    new_prob->constraint_matrix->val = (double *)malloc(1 * sizeof(double));
+    new_prob->constraint_matrix->val[0] = 1.0;
+
+    if (new_prob->constraint_lower_bound)
+        free(new_prob->constraint_lower_bound);
+    if (new_prob->constraint_upper_bound)
+        free(new_prob->constraint_upper_bound);
+
+    new_prob->constraint_lower_bound = (double *)malloc(1 * sizeof(double));
+    new_prob->constraint_lower_bound[0] = -INFINITY;
+
+    new_prob->constraint_upper_bound = (double *)malloc(1 * sizeof(double));
+    new_prob->constraint_upper_bound[0] = INFINITY;
+
+    if (new_prob->dual_start != NULL)
+    {
+        free(new_prob->dual_start);
+    }
+    new_prob->dual_start = (double *)calloc(1, sizeof(double));
+
+    return new_prob;
+}
+
 double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
                                        cublasHandle_t blas_handle,
                                        const cu_sparse_matrix_csr_t *A,

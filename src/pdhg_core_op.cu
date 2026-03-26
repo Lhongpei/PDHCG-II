@@ -755,7 +755,14 @@ void initialize_step_size_and_primal_weight(pdhg_solver_state_t *state, const pd
                                                         state->constraint_matrix_t,
                                                         params->sv_max_iter,
                                                         params->sv_tol);
-        state->step_size = 0.998 / max_sv;
+        if (max_sv < 1e-12)
+        {
+            state->step_size = 1.0;
+        }
+        else
+        {
+            state->step_size = 0.998 / max_sv;
+        }
     }
 
     if (params->bound_objective_rescaling)

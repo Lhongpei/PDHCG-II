@@ -557,25 +557,25 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
 {
     pdhg_solver_state_t *state = (pdhg_solver_state_t *)safe_calloc(1, sizeof(pdhg_solver_state_t));
 
-    int n_vars = working_problem->num_variables;
-    int n_cons = working_problem->num_constraints;
+    int n_vars = rescale_info->scaled_problem->num_variables;
+    int n_cons = rescale_info->scaled_problem->num_constraints;
     size_t var_bytes = n_vars * sizeof(double);
     size_t con_bytes = n_cons * sizeof(double);
 
     state->num_variables = n_vars;
     state->num_constraints = n_cons;
-    state->objective_constant = working_problem->objective_constant;
+    state->objective_constant = rescale_info->scaled_problem->objective_constant;
 
     state->constraint_matrix = (cu_sparse_matrix_csr_t *)safe_malloc(sizeof(cu_sparse_matrix_csr_t));
     state->constraint_matrix_t = (cu_sparse_matrix_csr_t *)safe_malloc(sizeof(cu_sparse_matrix_csr_t));
 
     state->constraint_matrix->num_rows = n_cons;
     state->constraint_matrix->num_cols = n_vars;
-    state->constraint_matrix->num_nonzeros = working_problem->constraint_matrix_num_nonzeros;
+    state->constraint_matrix->num_nonzeros = rescale_info->scaled_problem->constraint_matrix_num_nonzeros;
 
     state->constraint_matrix_t->num_rows = n_vars;
     state->constraint_matrix_t->num_cols = n_cons;
-    state->constraint_matrix_t->num_nonzeros = working_problem->constraint_matrix_num_nonzeros;
+    state->constraint_matrix_t->num_nonzeros = rescale_info->scaled_problem->constraint_matrix_num_nonzeros;
 
     state->termination_reason = TERMINATION_REASON_UNSPECIFIED;
 
