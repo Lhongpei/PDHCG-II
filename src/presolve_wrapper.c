@@ -65,34 +65,23 @@ static qp_problem_t *convert_psqp_to_pdhcg(PresolvedProblem *reduced_prob, doubl
         pdhcg_prob->constraint_matrix->val = reduced_prob->Ax;
     }
 
-    if (reduced_prob->has_quad_qr)
-    {
-        if (reduced_prob->Qnnz > 0 && reduced_prob->Qp)
-        {
-            pdhcg_prob->objective_sparse_matrix = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
-            pdhcg_prob->objective_sparse_matrix->row_ptr = reduced_prob->Qp;
-            pdhcg_prob->objective_sparse_matrix->col_ind = reduced_prob->Qi;
-            pdhcg_prob->objective_sparse_matrix->val = reduced_prob->Qx;
-            pdhcg_prob->objective_sparse_matrix_num_nonzeros = (int)reduced_prob->Qnnz;
-        }
-
-        if (reduced_prob->Rnnz > 0 && reduced_prob->Rp)
-        {
-            pdhcg_prob->objective_lowrank_matrix = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
-            pdhcg_prob->objective_lowrank_matrix->row_ptr = reduced_prob->Rp;
-            pdhcg_prob->objective_lowrank_matrix->col_ind = reduced_prob->Ri;
-            pdhcg_prob->objective_lowrank_matrix->val = reduced_prob->Rx;
-            pdhcg_prob->objective_lowrank_matrix_num_nonzeros = (int)reduced_prob->Rnnz;
-            pdhcg_prob->num_rank_lowrank_obj = (int)reduced_prob->k;
-        }
-    }
-    else if (reduced_prob->has_quadratic && reduced_prob->Pnnz > 0 && reduced_prob->Pp)
+    if (reduced_prob->Qnnz > 0 && reduced_prob->Qp)
     {
         pdhcg_prob->objective_sparse_matrix = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
-        pdhcg_prob->objective_sparse_matrix->row_ptr = reduced_prob->Pp;
-        pdhcg_prob->objective_sparse_matrix->col_ind = reduced_prob->Pi;
-        pdhcg_prob->objective_sparse_matrix->val = reduced_prob->Px;
-        pdhcg_prob->objective_sparse_matrix_num_nonzeros = (int)reduced_prob->Pnnz;
+        pdhcg_prob->objective_sparse_matrix->row_ptr = reduced_prob->Qp;
+        pdhcg_prob->objective_sparse_matrix->col_ind = reduced_prob->Qi;
+        pdhcg_prob->objective_sparse_matrix->val = reduced_prob->Qx;
+        pdhcg_prob->objective_sparse_matrix_num_nonzeros = (int)reduced_prob->Qnnz;
+    }
+
+    if (reduced_prob->Rnnz > 0 && reduced_prob->Rp)
+    {
+        pdhcg_prob->objective_lowrank_matrix = (CsrComponent *)safe_calloc(1, sizeof(CsrComponent));
+        pdhcg_prob->objective_lowrank_matrix->row_ptr = reduced_prob->Rp;
+        pdhcg_prob->objective_lowrank_matrix->col_ind = reduced_prob->Ri;
+        pdhcg_prob->objective_lowrank_matrix->val = reduced_prob->Rx;
+        pdhcg_prob->objective_lowrank_matrix_num_nonzeros = (int)reduced_prob->Rnnz;
+        pdhcg_prob->num_rank_lowrank_obj = (int)reduced_prob->k;
     }
 
     return pdhcg_prob;

@@ -200,8 +200,8 @@ void print_usage(const char *prog_name)
             "      --inner_min_tol <float>         "
             "Minimum tolerance for the inner solver (default: 1e-9).\n");
     fprintf(stderr,
-            "      --no_presolve                   "
-            "Disable presolve (default: enabled).\n");
+            "      --presolve <int>                "
+            "Enable (1) or disable (0) presolve (default: 1).\n");
 }
 
 int run_pdhcg(int argc, char *argv[])
@@ -229,7 +229,7 @@ int run_pdhcg(int argc, char *argv[])
                                            {"inner_iter_limit", required_argument, 0, 1015},
                                            {"inner_init_tol", required_argument, 0, 1016},
                                            {"inner_min_tol", required_argument, 0, 1017},
-                                           {"no_presolve", no_argument, 0, 1018},
+                                           {"presolve", required_argument, 0, 1018},
                                            {0, 0, 0, 0}};
 
     int opt;
@@ -313,7 +313,7 @@ int run_pdhcg(int argc, char *argv[])
                 params.inner_solver_parameters.min_tolerance = atof(optarg);
                 break;
             case 1018: // --no_presolve
-                params.presolve = false;
+                params.presolve = (atoi(optarg) != 0);
                 break;
             case '?': // Unknown option
                 return 1;

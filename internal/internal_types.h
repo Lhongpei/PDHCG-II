@@ -17,6 +17,7 @@ limitations under the License.
 
 #pragma once
 
+#include "cusparse_compat.h"
 #include "pdhcg_types.h"
 #include <cublas_v2.h>
 #include <cusparse.h>

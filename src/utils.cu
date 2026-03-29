@@ -28,9 +28,6 @@ limitations under the License.
 std::mt19937 gen(1);
 std::normal_distribution<double> dist(0.0, 1.0);
 
-const double HOST_ONE = 1.0;
-const double HOST_ZERO = 0.0;
-
 void *safe_malloc(size_t size)
 {
     void *ptr = malloc(size);
@@ -633,7 +630,6 @@ void set_default_parameters(pdhg_parameters_t *params)
     params->termination_evaluation_frequency = 200;
     params->feasibility_polishing = false;
     params->reflection_coefficient = 1.0;
-    //TODO: Open Presolve When we verify PSQP
     params->presolve = false;
 
     params->sv_max_iter = 5000;
