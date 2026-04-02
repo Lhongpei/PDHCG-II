@@ -74,42 +74,42 @@ void col_permute_in_place(int m, int *Ap, int *Aj, double *Ax, const int *old_co
     free(buffer);
 }
 
-void permute_rows_structural(qp_problem_t *qp, const int *row_perm)
+void permute_csr_rows_structural(CsrComponent *csr, int num_rows, int nnz, const int *row_perm)
 {
-    int m = qp->num_constraints;
-    int nnz = qp->constraint_matrix_num_nonzeros;
+    if (!csr || nnz == 0)
+        return;
 
-    int *new_Ap = (int *)malloc((m + 1) * sizeof(int));
+    int *new_Ap = (int *)malloc((num_rows + 1) * sizeof(int));
     int *new_Aj = (int *)malloc(nnz * sizeof(int));
     double *new_Ax = (double *)malloc(nnz * sizeof(double));
 
     new_Ap[0] = 0;
     int current_nz = 0;
 
-    for (int i = 0; i < m; i++)
+    for (int i = 0; i < num_rows; i++)
     {
         int old_row_idx = row_perm[i];
 
-        int start = qp->constraint_matrix->row_ptr[old_row_idx];
-        int len = qp->constraint_matrix->row_ptr[old_row_idx + 1] - start;
+        int start = csr->row_ptr[old_row_idx];
+        int len = csr->row_ptr[old_row_idx + 1] - start;
 
         if (len > 0)
         {
-            memcpy(&new_Aj[current_nz], &qp->constraint_matrix->col_ind[start], len * sizeof(int));
-            memcpy(&new_Ax[current_nz], &qp->constraint_matrix->val[start], len * sizeof(double));
+            memcpy(&new_Aj[current_nz], &csr->col_ind[start], len * sizeof(int));
+            memcpy(&new_Ax[current_nz], &csr->val[start], len * sizeof(double));
             current_nz += len;
         }
 
         new_Ap[i + 1] = current_nz;
     }
 
-    free(qp->constraint_matrix->row_ptr);
-    free(qp->constraint_matrix->col_ind);
-    free(qp->constraint_matrix->val);
+    free(csr->row_ptr);
+    free(csr->col_ind);
+    free(csr->val);
 
-    qp->constraint_matrix->row_ptr = new_Ap;
-    qp->constraint_matrix->col_ind = new_Aj;
-    qp->constraint_matrix->val = new_Ax;
+    csr->row_ptr = new_Ap;
+    csr->col_ind = new_Aj;
+    csr->val = new_Ax;
 }
 
 void permute_double_array(double *arr, int n, const int *perm)
@@ -137,19 +137,45 @@ void permute_problem(qp_problem_t *qp, int *row_perm, int *col_perm)
     permute_double_array(qp->objective_vector, n, col_perm);
     permute_double_array(qp->variable_lower_bound, n, col_perm);
     permute_double_array(qp->variable_upper_bound, n, col_perm);
-    permute_double_array(qp->primal_start, n, col_perm);
+    if (qp->primal_start)
+        permute_double_array(qp->primal_start, n, col_perm);
 
     permute_double_array(qp->constraint_lower_bound, m, row_perm);
     permute_double_array(qp->constraint_upper_bound, m, row_perm);
-    permute_double_array(qp->dual_start, m, row_perm);
-
-    permute_rows_structural(qp, row_perm);
+    if (qp->dual_start)
+        permute_double_array(qp->dual_start, m, row_perm);
 
     int *inv_col_perm = (int *)malloc(n * sizeof(int));
     compute_inv_perm(n, col_perm, inv_col_perm);
 
-    col_permute_in_place(
-        m, qp->constraint_matrix->row_ptr, qp->constraint_matrix->col_ind, qp->constraint_matrix->val, inv_col_perm);
+    if (qp->constraint_matrix && qp->constraint_matrix_num_nonzeros > 0)
+    {
+        permute_csr_rows_structural(qp->constraint_matrix, m, qp->constraint_matrix_num_nonzeros, row_perm);
+        col_permute_in_place(m,
+                             qp->constraint_matrix->row_ptr,
+                             qp->constraint_matrix->col_ind,
+                             qp->constraint_matrix->val,
+                             inv_col_perm);
+    }
+
+    if (qp->objective_sparse_matrix && qp->objective_sparse_matrix_num_nonzeros > 0)
+    {
+        permute_csr_rows_structural(qp->objective_sparse_matrix, n, qp->objective_sparse_matrix_num_nonzeros, col_perm);
+        col_permute_in_place(n,
+                             qp->objective_sparse_matrix->row_ptr,
+                             qp->objective_sparse_matrix->col_ind,
+                             qp->objective_sparse_matrix->val,
+                             inv_col_perm);
+    }
+
+    if (qp->objective_lowrank_matrix && qp->objective_lowrank_matrix_num_nonzeros > 0)
+    {
+        col_permute_in_place(qp->num_rank_lowrank_obj,
+                             qp->objective_lowrank_matrix->row_ptr,
+                             qp->objective_lowrank_matrix->col_ind,
+                             qp->objective_lowrank_matrix->val,
+                             inv_col_perm);
+    }
 
     free(inv_col_perm);
 }
