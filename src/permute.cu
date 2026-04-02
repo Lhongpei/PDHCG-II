@@ -185,13 +185,8 @@ qp_problem_t *permute_problem_return_new(const qp_problem_t *qp, int *row_perm, 
     if (!qp)
         return NULL;
 
-    qp_problem_t *new_qp = (qp_problem_t *)malloc(sizeof(qp_problem_t));
-    if (!new_qp)
-        return NULL;
+    qp_problem_t *new_qp = deepcopy_problem(qp);
 
-    new_qp = deepcopy_problem(qp);
-
-#undef DEEP_COPY_ARRAY
     permute_problem(new_qp, row_perm, col_perm);
 
     return new_qp;
