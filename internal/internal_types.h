@@ -83,6 +83,8 @@ typedef enum
     CONVEX_QCQP
 } problem_type_t;
 
+typedef struct grid_context_s grid_context_t;
+
 typedef struct
 {
     int num_variables;
@@ -181,6 +183,7 @@ typedef struct
 
     problem_type_t problem_type;
     inner_solver_t *inner_solver;
+    grid_context_t *grid_context;
 } pdhg_solver_state_t;
 
 typedef struct
