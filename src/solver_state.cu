@@ -17,6 +17,7 @@ limitations under the License.
 
 #include "internal_types.h"
 #include "pdhcg.h"
+#include "pdhg_core_op.h"
 #include "preconditioner.h"
 #include "solver.h"
 #include "solver_state.h"
@@ -28,6 +29,18 @@ limitations under the License.
 #include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
+
+static int get_global_n(pdhg_solver_state_t *state)
+{
+    int n = state->num_variables;
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+    if (state->grid_context != NULL && state->grid_context->global_num_variables > 0)
+    {
+        n = state->grid_context->global_num_variables;
+    }
+#endif
+    return n;
+}
 
 static void initialize_sparse_component_obj(pdhg_solver_state_t *state, const qp_problem_t *problem)
 {
@@ -389,119 +402,6 @@ static void initialize_inner_solver(pdhg_solver_state_t *state, const pdhg_param
             fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
             exit(EXIT_FAILURE);
     }
-}
-
-__global__ void
-element_wise_mul_kernel(const double *__restrict__ A, const double *__restrict__ B, double *__restrict__ C, int n)
-{
-    for (int idx = blockDim.x * blockIdx.x + threadIdx.x; idx < n; idx += blockDim.x * gridDim.x)
-    {
-        C[idx] = A[idx] * B[idx];
-    }
-}
-
-void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
-{
-    switch (state->quadratic_objective_term->quad_obj_type)
-    {
-        case PDHCG_NON_Q:
-            return;
-        case PDHCG_SPARSE_Q:
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, primal_solution));
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->quadratic_objective_term->vec_primal_obj_prod,
-                                                  state->quadratic_objective_term->primal_obj_product));
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matQ,
-                                        state->vec_primal_sol,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_primal_obj_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->primal_obj_spmv_buffer));
-            return;
-        case PDHCG_DIAG_Q:
-            element_wise_mul_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
-                state->quadratic_objective_term->diagonal_objective_matrix,
-                primal_solution,
-                state->quadratic_objective_term->primal_obj_product,
-                state->num_variables);
-            return;
-        case PDHCG_LOW_RANK_Q:
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, primal_solution));
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matR,
-                                        state->vec_primal_sol,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_Rx_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->Rx_spmv_buffer));
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matRt,
-                                        state->quadratic_objective_term->vec_Rx_prod,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_primal_obj_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->RRx_spmv_buffer));
-            return;
-        case PDHCG_LOW_RANK_PLUS_SPARSE_Q:
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, primal_solution));
-
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matQ,
-                                        state->vec_primal_sol,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_primal_obj_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->primal_obj_spmv_buffer));
-
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matR,
-                                        state->vec_primal_sol,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_Rx_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->Rx_spmv_buffer));
-
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matRt,
-                                        state->quadratic_objective_term->vec_Rx_prod,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->vec_primal_obj_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->RRx_spmv_buffer));
-            return;
-
-        default:
-            fprintf(stderr, "Error: Unknown Quadratic Objective Type detected.\n");
-            exit(EXIT_FAILURE);
-    }
-}
-
-double compute_xQx(pdhg_solver_state_t *state, double *primal_sol, double *primal_obj_product)
-{
-    if (state->quadratic_objective_term->quad_obj_type == PDHCG_NON_Q)
-        return 0.0;
-
-    double xQx = 0.0;
-    CUBLAS_CHECK(cublasDdot(state->blas_handle, state->num_variables, primal_sol, 1, primal_obj_product, 1, &xQx));
-    return xQx;
 }
 
 static void decide_problem_type(pdhg_solver_state_t *state)

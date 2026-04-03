@@ -17,6 +17,7 @@ limitations under the License.
 
 #pragma once
 
+#include "cusparse_compat.h"
 #include "internal_types.h"
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
@@ -28,6 +29,8 @@ limitations under the License.
 extern "C"
 {
 #endif
+    static const double HOST_ONE = 1.0;
+    static const double HOST_ZERO = 0.0;
 
 #define CUDA_CHECK(call)                                                                                               \
     do                                                                                                                 \
@@ -84,6 +87,8 @@ extern "C"
     extern const double HOST_ONE;
     extern const double HOST_ZERO;
 
+    double get_uniform_random();
+    double get_normal_random();
     void *safe_malloc(size_t size);
 
     void *safe_calloc(size_t num, size_t size);
@@ -93,26 +98,6 @@ extern "C"
     qp_problem_t *deepcopy_problem(const qp_problem_t *prob);
 
     qp_problem_t *create_problem_with_dummy_constraint(const qp_problem_t *prob);
-
-    double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
-                                           cublasHandle_t blas_handle,
-                                           const cu_sparse_matrix_csr_t *A,
-                                           const cu_sparse_matrix_csr_t *AT,
-                                           int max_iterations,
-                                           double tolerance);
-
-    double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
-                                       cublasHandle_t blas_handle,
-                                       const cu_sparse_matrix_csr_t *A,
-                                       int max_iterations,
-                                       double tolerance);
-
-    double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
-                                       cublasHandle_t blas_handle,
-                                       const cu_sparse_matrix_csr_t *A,
-                                       double lambda_max,
-                                       int max_iterations,
-                                       double tolerance);
 
     void compute_interaction_and_movement(pdhg_solver_state_t *solver_state, double *interaction, double *movement);
 
@@ -134,10 +119,6 @@ extern "C"
 
     int get_print_frequency(int iter);
 
-    void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm);
-
-    void compute_infeasibility_information(pdhg_solver_state_t *state);
-
     void fill_or_copy(double **dest, int n, const double *src, double fill_value);
 
     int dense_to_csr(const matrix_desc_t *desc, int **row_ptr, int **col_ind, double **vals, int *nnz_out);
@@ -146,82 +127,11 @@ extern "C"
 
     int coo_to_csr(const matrix_desc_t *desc, int **row_ptr, int **col_ind, double **vals, int *nnz_out);
 
-    void check_feas_polishing_termination_criteria(pdhg_solver_state_t *solver_state,
-                                                   const termination_criteria_t *criteria,
-                                                   bool is_primal_polish);
-
-    void print_initial_feas_polish_info(bool is_primal_polish, const pdhg_parameters_t *params);
-
-    void display_feas_polish_iteration_stats(const pdhg_solver_state_t *state, int verbose, bool is_primal_polish);
-
-    void pdhg_feas_polish_final_log(const pdhg_solver_state_t *primal_state,
-                                    const pdhg_solver_state_t *dual_state,
-                                    int verbose);
-
-    void compute_primal_feas_polish_residual(pdhg_solver_state_t *state,
-                                             const pdhg_solver_state_t *ori_state,
-                                             norm_type_t optimality_norm);
-
-    void compute_dual_feas_polish_residual(pdhg_solver_state_t *state,
-                                           const pdhg_solver_state_t *ori_state,
-                                           norm_type_t optimality_norm);
-
     void set_default_parameters(pdhg_parameters_t *params);
-
-    __global__ void compute_residual_kernel(double *primal_residual,
-                                            const double *primal_product,
-                                            const double *constraint_lower_bound,
-                                            const double *constraint_upper_bound,
-                                            const double *dual_solution,
-                                            double *dual_residual,
-                                            const double *dual_product,
-                                            const double *dual_slack,
-                                            const double *objective_vector,
-                                            const double *constraint_rescaling,
-                                            const double *variable_rescaling,
-                                            double *dual_obj_contribution,
-                                            const double *const_lb_finite,
-                                            const double *const_ub_finite,
-                                            int num_constraints,
-                                            int num_variables);
 
     double get_vector_sum(cublasHandle_t handle, int n, double *ones_d, const double *x_d);
     double get_vector_inf_norm(cublasHandle_t handle, int n, const double *x_d);
 
-    __global__ void primal_infeasibility_project_kernel(double *primal_ray_estimate,
-                                                        const double *variable_lower_bound,
-                                                        const double *variable_upper_bound,
-                                                        int num_variables);
-    __global__ void dual_infeasibility_project_kernel(double *dual_ray_estimate,
-                                                      const double *constraint_lower_bound,
-                                                      const double *constraint_upper_bound,
-                                                      int num_constraints);
-    __global__ void compute_dual_infeasibility_kernel(const double *dual_product,
-                                                      const double *var_lb,
-                                                      const double *var_ub,
-                                                      int num_variables,
-                                                      double *dual_infeasibility,
-                                                      const double *variable_rescaling);
-    __global__ void
-    dual_solution_dual_objective_contribution_kernel(const double *constraint_lower_bound_finite_val,
-                                                     const double *constraint_upper_bound_finite_val,
-                                                     const double *dual_solution,
-                                                     int num_constraints,
-                                                     double *dual_objective_dual_solution_contribution_array);
-
-    __global__ void
-    dual_objective_dual_slack_contribution_array_kernel(const double *dual_slack,
-                                                        double *dual_objective_dual_slack_contribution_array,
-                                                        const double *variable_lower_bound_finite_val,
-                                                        const double *variable_upper_bound_finite_val,
-                                                        int num_variables);
-
-    __global__ void compute_primal_infeasibility_kernel(const double *primal_product,
-                                                        const double *const_lb,
-                                                        const double *const_ub,
-                                                        int num_constraints,
-                                                        double *primal_infeasibility,
-                                                        const double *constraint_rescaling);
     CsrComponent *deepcopy_csr_component(const CsrComponent *src, size_t num_rows, size_t nnz);
     quad_obj_type_t detect_q_type(const CsrComponent *sparse_component,
                                   const CsrComponent *low_rank_component,

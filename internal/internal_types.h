@@ -17,6 +17,7 @@ limitations under the License.
 
 #pragma once
 
+#include "cusparse_compat.h"
 #include "pdhcg_types.h"
 #include <cublas_v2.h>
 #include <cusparse.h>
@@ -81,6 +82,8 @@ typedef enum
     NONCONVEX_QP,
     CONVEX_QCQP
 } problem_type_t;
+
+typedef struct grid_context_s grid_context_t;
 
 typedef struct
 {
@@ -180,6 +183,7 @@ typedef struct
 
     problem_type_t problem_type;
     inner_solver_t *inner_solver;
+    grid_context_t *grid_context;
 } pdhg_solver_state_t;
 
 typedef struct
