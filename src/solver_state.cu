@@ -30,6 +30,18 @@ limitations under the License.
 #include <stdio.h>
 #include <time.h>
 
+static int get_global_n(pdhg_solver_state_t *state)
+{
+    int n = state->num_variables;
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+    if (state->grid_context != NULL && state->grid_context->global_num_variables > 0)
+    {
+        n = state->grid_context->global_num_variables;
+    }
+#endif
+    return n;
+}
+
 static void initialize_sparse_component_obj(pdhg_solver_state_t *state, const qp_problem_t *problem)
 {
     state->quadratic_objective_term->objective_sparse_matrix =

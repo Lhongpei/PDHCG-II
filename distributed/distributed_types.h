@@ -29,6 +29,7 @@ struct grid_context_s
     int rank_global;
     int coords[2];
     int dims[2];
+    int global_num_variables;
 };
 
 typedef struct
