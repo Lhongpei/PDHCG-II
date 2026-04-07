@@ -20,11 +20,12 @@ limitations under the License.
 #include "internal_types.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
-
-rescale_info_t *rescale_problem(const pdhg_parameters_t *params,
-                                const qp_problem_t *original_problem);
+    processed_qp_problem_t *preprocess_qp_problem(const qp_problem_t *raw_problem);
+    void free_processed_qp_problem(processed_qp_problem_t *processed);
+    rescale_info_t *rescale_problem(const pdhg_parameters_t *params, const qp_problem_t *original_problem);
 
 #ifdef __cplusplus
 }

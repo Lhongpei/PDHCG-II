@@ -192,16 +192,6 @@ typedef struct
 
 typedef struct
 {
-    qp_problem_t *scaled_problem;
-    double *con_rescale;
-    double *var_rescale;
-    double con_bound_rescale;
-    double obj_vec_rescale;
-    double rescaling_time_sec;
-} rescale_info_t;
-
-typedef struct
-{
     int num_variables;
     int num_constraints;
     int num_rank_lowrank_obj;
@@ -228,3 +218,14 @@ typedef struct
     double *dual_start;
     quad_obj_type_t quad_type;
 } processed_qp_problem_t;
+
+typedef struct
+{
+    qp_problem_t *scaled_problem;
+    processed_qp_problem_t *processed_problem;
+    double *con_rescale;
+    double *var_rescale;
+    double con_bound_rescale;
+    double obj_vec_rescale;
+    double rescaling_time_sec;
+} rescale_info_t;

@@ -28,12 +28,10 @@ limitations under the License.
 extern "C"
 {
 #endif
-    processed_qp_problem_t *preprocess_qp_problem(const qp_problem_t *raw_problem);
-    void free_processed_qp_problem(processed_qp_problem_t *processed);
     void initialize_step_size_and_primal_weight(pdhg_solver_state_t *state, const pdhg_parameters_t *params);
 
     pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
-                                                 const processed_qp_problem_t *working_problem,
+                                                 const qp_problem_t *working_problem,
                                                  const rescale_info_t *rescale_info,
                                                  grid_context_t *grid_context);
 
