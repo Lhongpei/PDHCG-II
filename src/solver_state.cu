@@ -39,28 +39,45 @@ static int get_global_n(pdhg_solver_state_t *state)
         n = state->grid_context->global_num_variables;
     }
 #endif
+    (void)state;
     return n;
 }
 
-static void initialize_sparse_component_obj(pdhg_solver_state_t *state, const qp_problem_t *problem)
+static int get_n_start(pdhg_solver_state_t *state)
+{
+    int start = 0;
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+    if (state->grid_context != NULL)
+    {
+        start = state->grid_context->n_start;
+    }
+#endif
+    (void)state;
+    return start;
+}
+
+static void initialize_sparse_component_obj(pdhg_solver_state_t *state, const processed_qp_problem_t *problem)
 {
     state->quadratic_objective_term->objective_sparse_matrix =
         (cu_sparse_matrix_csr_t *)safe_malloc(sizeof(cu_sparse_matrix_csr_t));
 
+    int q_rows = get_global_n(state);
+    int q_cols = problem->num_variables;
+
     memset(state->quadratic_objective_term->objective_sparse_matrix, 0, sizeof(cu_sparse_matrix_csr_t));
-    state->quadratic_objective_term->objective_sparse_matrix->num_rows = problem->num_variables;
-    state->quadratic_objective_term->objective_sparse_matrix->num_cols = problem->num_variables;
+    state->quadratic_objective_term->objective_sparse_matrix->num_rows = q_rows;
+    state->quadratic_objective_term->objective_sparse_matrix->num_cols = q_cols;
     state->quadratic_objective_term->objective_sparse_matrix->num_nonzeros =
         problem->objective_sparse_matrix_num_nonzeros;
 
     ALLOC_AND_COPY_CSR(state->quadratic_objective_term->objective_sparse_matrix,
                        problem->objective_sparse_matrix,
-                       problem->num_variables,
+                       q_rows,
                        problem->objective_sparse_matrix_num_nonzeros);
 
     CUSPARSE_CHECK(cusparseCreateCsr(&state->quadratic_objective_term->matQ,
-                                     state->num_variables,
-                                     state->num_variables,
+                                     q_rows,
+                                     q_cols,
                                      state->quadratic_objective_term->objective_sparse_matrix->num_nonzeros,
                                      state->quadratic_objective_term->objective_sparse_matrix->row_ptr,
                                      state->quadratic_objective_term->objective_sparse_matrix->col_ind,
@@ -77,32 +94,30 @@ static void initialize_sparse_component_obj(pdhg_solver_state_t *state, const qp
                                            state->quadratic_objective_term->matQ,
                                            state->vec_primal_sol,
                                            &HOST_ZERO,
-                                           state->quadratic_objective_term->vec_primal_obj_prod,
+                                           state->quadratic_objective_term->vec_global_primal_obj_prod,
                                            CUDA_R_64F,
                                            CUSPARSE_SPMV_CSR_ALG2,
                                            &primal_spmv_buffer_size));
+
     CUDA_CHECK(cudaMalloc(&state->quadratic_objective_term->primal_obj_spmv_buffer, primal_spmv_buffer_size));
+
     CUSPARSE_CHECK(cusparseSpMV_preprocess(state->sparse_handle,
                                            CUSPARSE_OPERATION_NON_TRANSPOSE,
                                            &HOST_ONE,
                                            state->quadratic_objective_term->matQ,
                                            state->vec_primal_sol,
                                            &HOST_ZERO,
-                                           state->quadratic_objective_term->vec_primal_obj_prod,
+                                           state->quadratic_objective_term->vec_global_primal_obj_prod,
                                            CUDA_R_64F,
                                            CUSPARSE_SPMV_CSR_ALG2,
                                            state->quadratic_objective_term->primal_obj_spmv_buffer));
 }
 
-static void initialize_lowrank_component_obj(pdhg_solver_state_t *state, const qp_problem_t *problem)
+static void initialize_lowrank_component_obj(pdhg_solver_state_t *state, const processed_qp_problem_t *problem)
 {
     state->quadratic_objective_term->num_rank_lowrank_obj = problem->num_rank_lowrank_obj;
     ALLOC_ZERO(state->quadratic_objective_term->Rx_product, problem->num_rank_lowrank_obj * sizeof(double));
 
-    CUSPARSE_CHECK(cusparseCreateDnVec(&state->quadratic_objective_term->vec_primal_obj_prod,
-                                       state->num_variables,
-                                       state->quadratic_objective_term->primal_obj_product,
-                                       CUDA_R_64F));
     CUSPARSE_CHECK(cusparseCreateDnVec(&state->quadratic_objective_term->vec_Rx_prod,
                                        state->quadratic_objective_term->num_rank_lowrank_obj,
                                        state->quadratic_objective_term->Rx_product,
@@ -126,7 +141,6 @@ static void initialize_lowrank_component_obj(pdhg_solver_state_t *state, const q
         (cu_sparse_matrix_csr_t *)safe_malloc(sizeof(cu_sparse_matrix_csr_t));
 
     memset(state->quadratic_objective_term->objective_lowrank_matrix_t, 0, sizeof(cu_sparse_matrix_csr_t));
-
     state->quadratic_objective_term->objective_lowrank_matrix_t->num_rows = problem->num_variables;
     state->quadratic_objective_term->objective_lowrank_matrix_t->num_cols = problem->num_rank_lowrank_obj;
     state->quadratic_objective_term->objective_lowrank_matrix_t->num_nonzeros =
@@ -174,7 +188,6 @@ static void initialize_lowrank_component_obj(pdhg_solver_state_t *state, const q
                                       CUSPARSE_INDEX_BASE_ZERO,
                                       CUSPARSE_CSR2CSC_ALG_DEFAULT,
                                       buffer));
-
     CUDA_CHECK(cudaFree(buffer));
 
     CUSPARSE_CHECK(cusparseCreateCsr(&state->quadratic_objective_term->matR,
@@ -248,61 +261,49 @@ static void initialize_lowrank_component_obj(pdhg_solver_state_t *state, const q
                                            state->quadratic_objective_term->RRx_spmv_buffer));
 }
 
-static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const qp_problem_t *problem)
+static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const processed_qp_problem_t *problem)
 {
     state->quadratic_objective_term = (quadratic_objective_term_t *)safe_malloc(sizeof(quadratic_objective_term_t));
+    state->quadratic_objective_term->quad_obj_type = problem->quad_type;
 
-    if ((!problem->objective_sparse_matrix || problem->objective_sparse_matrix_num_nonzeros == 0) &&
-        (!problem->objective_lowrank_matrix || problem->objective_lowrank_matrix_num_nonzeros == 0))
-    {
-        state->quadratic_objective_term->quad_obj_type = PDHCG_NON_Q;
-    }
-    else
-    {
-        state->quadratic_objective_term->quad_obj_type = detect_q_type(problem->objective_sparse_matrix,
-                                                                       problem->objective_lowrank_matrix,
-                                                                       problem->num_variables,
-                                                                       problem->num_rank_lowrank_obj);
-    }
-
-    int n = problem->num_variables;
     if (state->quadratic_objective_term->quad_obj_type == PDHCG_NON_Q)
         return;
 
-    size_t var_bytes = n * sizeof(double);
-    ALLOC_ZERO(state->quadratic_objective_term->primal_obj_product, var_bytes);
+    int n_local = problem->num_variables;
+    int n_global = get_global_n(state);
+    int n_start = get_n_start(state);
+
+    size_t alloc_elements = (n_global > n_local) ? n_global : n_local;
+    ALLOC_ZERO(state->quadratic_objective_term->global_primal_obj_product, alloc_elements * sizeof(double));
+
+    state->quadratic_objective_term->primal_obj_product =
+        state->quadratic_objective_term->global_primal_obj_product + n_start;
+
     CUSPARSE_CHECK(cusparseCreateDnVec(&state->quadratic_objective_term->vec_primal_obj_prod,
-                                       state->num_variables,
+                                       n_local,
                                        state->quadratic_objective_term->primal_obj_product,
                                        CUDA_R_64F));
 
+    if (n_global > n_local)
+    {
+        CUSPARSE_CHECK(cusparseCreateDnVec(&state->quadratic_objective_term->vec_global_primal_obj_prod,
+                                           n_global,
+                                           state->quadratic_objective_term->global_primal_obj_product,
+                                           CUDA_R_64F));
+    }
+    else
+    {
+        state->quadratic_objective_term->vec_global_primal_obj_prod =
+            state->quadratic_objective_term->vec_primal_obj_prod;
+    }
+
     switch (state->quadratic_objective_term->quad_obj_type)
     {
-        case PDHCG_NON_Q:
-            break;
         case PDHCG_DIAG_Q:
         {
-            double *h_diag = (double *)safe_calloc(n, sizeof(double));
-
-            CsrComponent *csr = problem->objective_sparse_matrix;
-            if (csr->row_ptr && csr->col_ind && csr->val)
-            {
-                for (int i = 0; i < n; ++i)
-                {
-                    for (int k = csr->row_ptr[i]; k < csr->row_ptr[i + 1]; ++k)
-                    {
-                        int col = csr->col_ind[k];
-                        if (col < n)
-                        {
-                            h_diag[col] = csr->val[k] + 1e-12;
-                        }
-                    }
-                }
-            }
-
-            ALLOC_AND_COPY(state->quadratic_objective_term->diagonal_objective_matrix, h_diag, n * sizeof(double));
-
-            free(h_diag);
+            ALLOC_AND_COPY(state->quadratic_objective_term->diagonal_objective_matrix,
+                           problem->diagonal_quad_objective,
+                           n_local * sizeof(double));
             state->quadratic_objective_term->objective_sparse_matrix = NULL;
             state->quadratic_objective_term->objective_lowrank_matrix = NULL;
             break;
@@ -310,20 +311,16 @@ static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const qp_p
 
         case PDHCG_SPARSE_Q:
         {
-
             initialize_sparse_component_obj(state, problem);
             CUDA_CHECK(cudaGetLastError());
-
             state->quadratic_objective_term->diagonal_objective_matrix = NULL;
             break;
         }
 
         case PDHCG_LOW_RANK_Q:
         {
-
             initialize_lowrank_component_obj(state, problem);
             CUDA_CHECK(cudaGetLastError());
-
             state->quadratic_objective_term->diagonal_objective_matrix = NULL;
             break;
         }
@@ -334,7 +331,6 @@ static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const qp_p
             CUDA_CHECK(cudaGetLastError());
             initialize_lowrank_component_obj(state, problem);
             CUDA_CHECK(cudaGetLastError());
-
             state->quadratic_objective_term->diagonal_objective_matrix = NULL;
             break;
         }
@@ -448,53 +444,58 @@ void initialize_quadratic_term_information(pdhg_solver_state_t *state, const pdh
         }
         state->quadratic_objective_term->norm = max_eigen;
         state->quadratic_objective_term->nonconvexity = min_eigen;
+        free(temp_diag_host);
     }
 }
 
 pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
-                                             const qp_problem_t *working_problem,
-                                             const rescale_info_t *rescale_info)
+                                             const processed_qp_problem_t *working_problem,
+                                             const rescale_info_t *rescale_info,
+                                             grid_context_t *grid_context)
 {
     pdhg_solver_state_t *state = (pdhg_solver_state_t *)safe_calloc(1, sizeof(pdhg_solver_state_t));
 
-    int n_vars = rescale_info->scaled_problem->num_variables;
-    int n_cons = rescale_info->scaled_problem->num_constraints;
+    state->grid_context = grid_context;
+
+    int n_vars = working_problem->num_variables;
+    int n_cons = working_problem->num_constraints;
     size_t var_bytes = n_vars * sizeof(double);
     size_t con_bytes = n_cons * sizeof(double);
 
     state->num_variables = n_vars;
     state->num_constraints = n_cons;
-    state->objective_constant = rescale_info->scaled_problem->objective_constant;
+    state->objective_constant = working_problem->objective_constant;
 
     state->constraint_matrix = (cu_sparse_matrix_csr_t *)safe_malloc(sizeof(cu_sparse_matrix_csr_t));
     state->constraint_matrix_t = (cu_sparse_matrix_csr_t *)safe_malloc(sizeof(cu_sparse_matrix_csr_t));
 
     state->constraint_matrix->num_rows = n_cons;
     state->constraint_matrix->num_cols = n_vars;
-    state->constraint_matrix->num_nonzeros = rescale_info->scaled_problem->constraint_matrix_num_nonzeros;
+    state->constraint_matrix->num_nonzeros = working_problem->constraint_matrix_num_nonzeros;
 
     state->constraint_matrix_t->num_rows = n_vars;
     state->constraint_matrix_t->num_cols = n_cons;
-    state->constraint_matrix_t->num_nonzeros = rescale_info->scaled_problem->constraint_matrix_num_nonzeros;
+    state->constraint_matrix_t->num_nonzeros = working_problem->constraint_matrix_num_nonzeros;
 
     state->termination_reason = TERMINATION_REASON_UNSPECIFIED;
 
-    state->rescaling_time_sec = rescale_info->rescaling_time_sec;
+    state->rescaling_time_sec = rescale_info ? rescale_info->rescaling_time_sec : 0.0;
 
     ALLOC_AND_COPY_CSR(state->constraint_matrix,
-                       rescale_info->scaled_problem->constraint_matrix,
-                       rescale_info->scaled_problem->num_constraints,
-                       rescale_info->scaled_problem->constraint_matrix_num_nonzeros);
+                       working_problem->constraint_matrix,
+                       working_problem->num_constraints,
+                       working_problem->constraint_matrix_num_nonzeros);
 
     CUDA_CHECK(cudaMalloc(&state->constraint_matrix_t->row_ptr, (n_vars + 1) * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&state->constraint_matrix_t->col_ind,
-                          rescale_info->scaled_problem->constraint_matrix_num_nonzeros * sizeof(int)));
-    CUDA_CHECK(cudaMalloc(&state->constraint_matrix_t->val,
-                          rescale_info->scaled_problem->constraint_matrix_num_nonzeros * sizeof(double)));
+                          working_problem->constraint_matrix_num_nonzeros * sizeof(int)));
+    CUDA_CHECK(
+        cudaMalloc(&state->constraint_matrix_t->val, working_problem->constraint_matrix_num_nonzeros * sizeof(double)));
 
     CUSPARSE_CHECK(cusparseCreate(&state->sparse_handle));
     CUBLAS_CHECK(cublasCreate(&state->blas_handle));
     CUBLAS_CHECK(cublasSetPointerMode(state->blas_handle, CUBLAS_POINTER_MODE_HOST));
+
     if (state->constraint_matrix->num_nonzeros > 0)
     {
         size_t buffer_size = 0;
@@ -539,16 +540,20 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
         CUDA_CHECK(cudaMemset(state->constraint_matrix_t->row_ptr, 0, (state->num_variables + 1) * sizeof(int)));
     }
     CUDA_CHECK(cudaGetLastError());
-    ALLOC_AND_COPY(state->variable_lower_bound, rescale_info->scaled_problem->variable_lower_bound, var_bytes);
-    ALLOC_AND_COPY(state->variable_upper_bound, rescale_info->scaled_problem->variable_upper_bound, var_bytes);
-    ALLOC_AND_COPY(state->objective_vector, rescale_info->scaled_problem->objective_vector, var_bytes);
-    ALLOC_AND_COPY(state->constraint_lower_bound, rescale_info->scaled_problem->constraint_lower_bound, con_bytes);
-    ALLOC_AND_COPY(state->constraint_upper_bound, rescale_info->scaled_problem->constraint_upper_bound, con_bytes);
-    ALLOC_AND_COPY(state->constraint_rescaling, rescale_info->con_rescale, con_bytes);
-    ALLOC_AND_COPY(state->variable_rescaling, rescale_info->var_rescale, var_bytes);
 
-    state->constraint_bound_rescaling = rescale_info->con_bound_rescale;
-    state->objective_vector_rescaling = rescale_info->obj_vec_rescale;
+    ALLOC_AND_COPY(state->variable_lower_bound, working_problem->variable_lower_bound, var_bytes);
+    ALLOC_AND_COPY(state->variable_upper_bound, working_problem->variable_upper_bound, var_bytes);
+    ALLOC_AND_COPY(state->objective_vector, working_problem->objective_vector, var_bytes);
+    ALLOC_AND_COPY(state->constraint_lower_bound, working_problem->constraint_lower_bound, con_bytes);
+    ALLOC_AND_COPY(state->constraint_upper_bound, working_problem->constraint_upper_bound, con_bytes);
+
+    if (rescale_info)
+    {
+        ALLOC_AND_COPY(state->constraint_rescaling, rescale_info->con_rescale, con_bytes);
+        ALLOC_AND_COPY(state->variable_rescaling, rescale_info->var_rescale, var_bytes);
+        state->constraint_bound_rescaling = rescale_info->con_bound_rescale;
+        state->objective_vector_rescaling = rescale_info->obj_vec_rescale;
+    }
 
     ALLOC_ZERO(state->initial_primal_solution, var_bytes);
     ALLOC_ZERO(state->current_primal_solution, var_bytes);
@@ -572,8 +577,8 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
     {
         double *rescaled = (double *)safe_malloc(var_bytes);
         for (int i = 0; i < n_vars; ++i)
-            rescaled[i] =
-                working_problem->primal_start[i] * rescale_info->var_rescale[i] * rescale_info->con_bound_rescale;
+            rescaled[i] = working_problem->primal_start[i] *
+                (rescale_info ? rescale_info->var_rescale[i] * rescale_info->con_bound_rescale : 1.0);
         CUDA_CHECK(cudaMemcpy(state->initial_primal_solution, rescaled, var_bytes, cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(state->current_primal_solution, rescaled, var_bytes, cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(state->pdhg_primal_solution, rescaled, var_bytes, cudaMemcpyHostToDevice));
@@ -583,33 +588,31 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
     {
         double *rescaled = (double *)safe_malloc(con_bytes);
         for (int i = 0; i < n_cons; ++i)
-            rescaled[i] = working_problem->dual_start[i] * rescale_info->con_rescale[i] * rescale_info->obj_vec_rescale;
+            rescaled[i] = working_problem->dual_start[i] *
+                (rescale_info ? rescale_info->con_rescale[i] * rescale_info->obj_vec_rescale : 1.0);
         CUDA_CHECK(cudaMemcpy(state->initial_dual_solution, rescaled, con_bytes, cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(state->current_dual_solution, rescaled, con_bytes, cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(state->pdhg_dual_solution, rescaled, con_bytes, cudaMemcpyHostToDevice));
         free(rescaled);
     }
     CUDA_CHECK(cudaGetLastError());
+
     double *temp_host = (double *)safe_malloc(fmax(var_bytes, con_bytes));
     for (int i = 0; i < n_cons; ++i)
-        temp_host[i] = isfinite(rescale_info->scaled_problem->constraint_lower_bound[i])
-            ? rescale_info->scaled_problem->constraint_lower_bound[i]
-            : 0.0;
+        temp_host[i] =
+            isfinite(working_problem->constraint_lower_bound[i]) ? working_problem->constraint_lower_bound[i] : 0.0;
     ALLOC_AND_COPY(state->constraint_lower_bound_finite_val, temp_host, con_bytes);
     for (int i = 0; i < n_cons; ++i)
-        temp_host[i] = isfinite(rescale_info->scaled_problem->constraint_upper_bound[i])
-            ? rescale_info->scaled_problem->constraint_upper_bound[i]
-            : 0.0;
+        temp_host[i] =
+            isfinite(working_problem->constraint_upper_bound[i]) ? working_problem->constraint_upper_bound[i] : 0.0;
     ALLOC_AND_COPY(state->constraint_upper_bound_finite_val, temp_host, con_bytes);
     for (int i = 0; i < n_vars; ++i)
-        temp_host[i] = isfinite(rescale_info->scaled_problem->variable_lower_bound[i])
-            ? rescale_info->scaled_problem->variable_lower_bound[i]
-            : 0.0;
+        temp_host[i] =
+            isfinite(working_problem->variable_lower_bound[i]) ? working_problem->variable_lower_bound[i] : 0.0;
     ALLOC_AND_COPY(state->variable_lower_bound_finite_val, temp_host, var_bytes);
     for (int i = 0; i < n_vars; ++i)
-        temp_host[i] = isfinite(rescale_info->scaled_problem->variable_upper_bound[i])
-            ? rescale_info->scaled_problem->variable_upper_bound[i]
-            : 0.0;
+        temp_host[i] =
+            isfinite(working_problem->variable_upper_bound[i]) ? working_problem->variable_upper_bound[i] : 0.0;
     ALLOC_AND_COPY(state->variable_upper_bound_finite_val, temp_host, var_bytes);
     free(temp_host);
 
@@ -733,6 +736,7 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
     CUSPARSE_CHECK(
         cusparseCreateDnVec(&state->vec_primal_prod, state->num_constraints, state->primal_product, CUDA_R_64F));
     CUSPARSE_CHECK(cusparseCreateDnVec(&state->vec_dual_prod, state->num_variables, state->dual_product, CUDA_R_64F));
+
     CUSPARSE_CHECK(cusparseSpMV_bufferSize(state->sparse_handle,
                                            CUSPARSE_OPERATION_NON_TRANSPOSE,
                                            &HOST_ONE,
@@ -754,6 +758,7 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
                                            CUDA_R_64F,
                                            CUSPARSE_SPMV_CSR_ALG2,
                                            &dual_spmv_buffer_size));
+
     CUDA_CHECK(cudaMalloc(&state->primal_spmv_buffer, primal_spmv_buffer_size));
     CUSPARSE_CHECK(cusparseSpMV_preprocess(state->sparse_handle,
                                            CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -778,7 +783,7 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
                                            CUSPARSE_SPMV_CSR_ALG2,
                                            state->dual_spmv_buffer));
 
-    initialize_quadratic_obj_term(state, rescale_info->scaled_problem);
+    initialize_quadratic_obj_term(state, working_problem);
     initialize_quadratic_term_information(state, params);
     initialize_inner_solver(state, params);
 
@@ -799,6 +804,7 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
         cudaMemcpy(state->ones_dual_d, ones_dual_h, state->num_constraints * sizeof(double), cudaMemcpyHostToDevice));
     decide_problem_type(state);
     free(ones_dual_h);
+
     if (params->verbose >= 2)
     {
         printf("-------------------------------------------------------------------"
@@ -840,6 +846,87 @@ pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
 
     return state;
 }
+
+processed_qp_problem_t *preprocess_qp_problem(const qp_problem_t *raw_problem)
+{
+    if (raw_problem == NULL)
+        return NULL;
+
+    processed_qp_problem_t *processed = (processed_qp_problem_t *)safe_calloc(1, sizeof(processed_qp_problem_t));
+
+    processed->num_variables = raw_problem->num_variables;
+    processed->num_constraints = raw_problem->num_constraints;
+    processed->num_rank_lowrank_obj = raw_problem->num_rank_lowrank_obj;
+    processed->objective_constant = raw_problem->objective_constant;
+
+    processed->constraint_matrix_num_nonzeros = raw_problem->constraint_matrix_num_nonzeros;
+    processed->objective_sparse_matrix_num_nonzeros = raw_problem->objective_sparse_matrix_num_nonzeros;
+    processed->objective_lowrank_matrix_num_nonzeros = raw_problem->objective_lowrank_matrix_num_nonzeros;
+
+    processed->variable_lower_bound = raw_problem->variable_lower_bound;
+    processed->variable_upper_bound = raw_problem->variable_upper_bound;
+    processed->objective_vector = raw_problem->objective_vector;
+    processed->constraint_lower_bound = raw_problem->constraint_lower_bound;
+    processed->constraint_upper_bound = raw_problem->constraint_upper_bound;
+    processed->primal_start = raw_problem->primal_start;
+    processed->dual_start = raw_problem->dual_start;
+    processed->constraint_matrix = raw_problem->constraint_matrix;
+    processed->objective_sparse_matrix = raw_problem->objective_sparse_matrix;
+    processed->objective_lowrank_matrix = raw_problem->objective_lowrank_matrix;
+
+    if ((!raw_problem->objective_sparse_matrix || raw_problem->objective_sparse_matrix_num_nonzeros == 0) &&
+        (!raw_problem->objective_lowrank_matrix || raw_problem->objective_lowrank_matrix_num_nonzeros == 0))
+    {
+        processed->quad_type = PDHCG_NON_Q;
+    }
+    else
+    {
+        processed->quad_type = detect_q_type(raw_problem->objective_sparse_matrix,
+                                             raw_problem->objective_lowrank_matrix,
+                                             raw_problem->num_variables,
+                                             raw_problem->num_rank_lowrank_obj);
+    }
+
+    processed->diagonal_quad_objective = NULL;
+    if (processed->quad_type == PDHCG_DIAG_Q)
+    {
+        int n = processed->num_variables;
+        processed->diagonal_quad_objective = (double *)safe_calloc(n, sizeof(double));
+
+        CsrComponent *csr = processed->objective_sparse_matrix;
+        if (csr && csr->row_ptr && csr->col_ind && csr->val)
+        {
+            for (int i = 0; i < n; ++i)
+            {
+                for (int k = csr->row_ptr[i]; k < csr->row_ptr[i + 1]; ++k)
+                {
+                    int col = csr->col_ind[k];
+                    if (col < n)
+                    {
+                        processed->diagonal_quad_objective[col] = csr->val[k] + 1e-12;
+                    }
+                }
+            }
+        }
+    }
+
+    return processed;
+}
+
+void free_processed_qp_problem(processed_qp_problem_t *processed)
+{
+    if (processed == NULL)
+        return;
+
+    if (processed->diagonal_quad_objective != NULL)
+    {
+        free(processed->diagonal_quad_objective);
+        processed->diagonal_quad_objective = NULL;
+    }
+
+    free(processed);
+}
+
 void pdhg_solver_state_free(pdhg_solver_state_t *state)
 {
     if (state == NULL)
@@ -917,6 +1004,14 @@ void pdhg_solver_state_free(pdhg_solver_state_t *state)
         CUDA_CHECK(cudaFree(state->ones_primal_d));
     if (state->ones_dual_d)
         CUDA_CHECK(cudaFree(state->ones_dual_d));
+
+    if (state->quadratic_objective_term)
+    {
+        if (state->quadratic_objective_term->global_primal_obj_product)
+            CUDA_CHECK(cudaFree(state->quadratic_objective_term->global_primal_obj_product));
+
+        free(state->quadratic_objective_term);
+    }
 
     free(state);
 }

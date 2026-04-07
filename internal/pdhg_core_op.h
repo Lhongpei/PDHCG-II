@@ -41,10 +41,6 @@ extern "C"
 
     void initialize_step_size_and_primal_weight(pdhg_solver_state_t *state, const pdhg_parameters_t *params);
 
-    pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,
-                                                 const qp_problem_t *original_problem,
-                                                 const rescale_info_t *rescale_info);
-
     void compute_fixed_point_error(pdhg_solver_state_t *state);
 
     void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm);

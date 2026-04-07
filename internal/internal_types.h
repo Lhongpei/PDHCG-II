@@ -54,6 +54,10 @@ typedef struct
     cusparseDnVecDescr_t vec_Rx_prod;
     cusparseDnVecDescr_t vec_RRx_prod;
     int num_rank_lowrank_obj;
+
+    // Buffer for Distributed Version
+    double *global_primal_obj_product;
+    cusparseDnVecDescr_t vec_global_primal_obj_prod;
 } quadratic_objective_term_t;
 
 typedef struct
@@ -195,3 +199,32 @@ typedef struct
     double obj_vec_rescale;
     double rescaling_time_sec;
 } rescale_info_t;
+
+typedef struct
+{
+    int num_variables;
+    int num_constraints;
+    int num_rank_lowrank_obj;
+    double *variable_lower_bound;
+    double *variable_upper_bound;
+    double *objective_vector;
+    double objective_constant;
+
+    CsrComponent *constraint_matrix;
+    int constraint_matrix_num_nonzeros;
+
+    CsrComponent *objective_sparse_matrix;
+    int objective_sparse_matrix_num_nonzeros;
+
+    CsrComponent *objective_lowrank_matrix;
+    int objective_lowrank_matrix_num_nonzeros;
+
+    double *diagonal_quad_objective;
+
+    double *constraint_lower_bound;
+    double *constraint_upper_bound;
+
+    double *primal_start;
+    double *dual_start;
+    quad_obj_type_t quad_type;
+} processed_qp_problem_t;

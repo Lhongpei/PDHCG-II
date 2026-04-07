@@ -30,6 +30,7 @@ struct grid_context_s
     int coords[2];
     int dims[2];
     int global_num_variables;
+    int n_start;
 };
 
 typedef struct

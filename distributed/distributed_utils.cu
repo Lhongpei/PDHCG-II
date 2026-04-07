@@ -274,7 +274,7 @@ qp_problem_t *partition_qp_problem(const qp_problem_t *global_qp,
         m_start, m_end, n_start, n_end, global_qp->constraint_matrix, &loc->constraint_matrix_num_nonzeros);
 
     loc->objective_sparse_matrix = extract_csr_component(
-        n_start, n_end, n_start, n_end, global_qp->objective_sparse_matrix, &loc->objective_sparse_matrix_num_nonzeros);
+        0, n_total, n_start, n_end, global_qp->objective_sparse_matrix, &loc->objective_sparse_matrix_num_nonzeros);
 
     loc->num_rank_lowrank_obj = global_qp->num_rank_lowrank_obj;
     loc->objective_lowrank_matrix = extract_csr_component(0,
