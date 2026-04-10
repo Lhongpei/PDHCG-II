@@ -341,17 +341,13 @@ static pdhcg_result_t *distributed_optimize_core(const pdhg_parameters_t *params
         state->inner_solver->iteration_limit = 1;
     }
 
-    printf("Here Start1\n");
     initialize_step_size_and_primal_weight(state, params);
 
-    printf("Here Start2\n");
     compute_residual(state, params->optimality_norm);
     MPI_Barrier(grid_context->comm_global);
-
-    printf("Here Start3\n");
     double start_time = MPI_Wtime();
     bool do_restart = false;
-    printf("Here Start4\n");
+
     while (state->total_count < params->termination_criteria.iteration_limit)
     {
         if ((state->is_this_major_iteration || state->total_count == 0) ||
@@ -368,11 +364,7 @@ static pdhcg_result_t *distributed_optimize_core(const pdhg_parameters_t *params
             state->cumulative_time_sec = (double)(MPI_Wtime() - start_time);
 
             check_termination_criteria(state, &params->termination_criteria);
-
-            if (grid_context->rank_global == 0)
-            {
-                display_iteration_stats(state, params->verbose);
-            }
+            display_iteration_stats(state, params->verbose);
 
             if (state->termination_reason != TERMINATION_REASON_UNSPECIFIED)
             {

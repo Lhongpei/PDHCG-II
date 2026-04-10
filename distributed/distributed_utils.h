@@ -62,13 +62,13 @@ extern "C"
                                               rescale_info_t *rescale_info,
                                               grid_context_t *grid_context,
                                               const pdhg_parameters_t *params,
-                                              qp_problem_t **out_local_lp,
+                                              qp_problem_t **out_local_qp,
                                               rescale_info_t **out_local_resc);
     void distribute_data_partition_then_send(const qp_problem_t *working_problem,
                                              rescale_info_t *rescale_info,
                                              grid_context_t *grid_context,
                                              const pdhg_parameters_t *params,
-                                             qp_problem_t **out_local_lp,
+                                             qp_problem_t **out_local_qp,
                                              rescale_info_t **out_local_resc);
     void initialize_step_size_and_primal_weight_distributed(pdhg_solver_state_t *state,
                                                             const pdhg_parameters_t *params);

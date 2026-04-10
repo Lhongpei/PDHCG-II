@@ -716,12 +716,13 @@ void distribute_data_bcast_then_partition(const qp_problem_t *working_problem,
                                           rescale_info_t *rescale_info,
                                           grid_context_t *grid_context,
                                           const pdhg_parameters_t *params,
-                                          qp_problem_t **out_local_lp,
+                                          qp_problem_t **out_local_qp,
                                           rescale_info_t **out_local_resc)
 {
     double t_start = MPI_Wtime();
     const qp_problem_t *current_working_problem = working_problem;
     rescale_info_t *current_rescale_info = rescale_info;
+    int real_n_start = 0;
 
     {
         char *buf = NULL;
@@ -764,16 +765,15 @@ void distribute_data_bcast_then_partition(const qp_problem_t *working_problem,
             free(buf);
     }
 
-    *out_local_resc = partition_rescale_info(current_rescale_info, grid_context, params->partition_method, NULL, NULL);
-    *out_local_lp = partition_qp_problem(current_working_problem, grid_context, params->partition_method, NULL, NULL);
+    *out_local_resc =
+        partition_rescale_info(current_rescale_info, grid_context, params->partition_method, &real_n_start, NULL);
+    *out_local_qp = partition_qp_problem(current_working_problem, grid_context, params->partition_method, NULL, NULL);
+    grid_context->n_start = real_n_start;
 
-    if (grid_context->rank_global == 0)
+    rescale_info_free(current_rescale_info);
+    if (grid_context->rank_global != 0)
     {
-        rescale_info_free(current_rescale_info);
-    }
-    else
-    {
-        rescale_info_free(current_rescale_info);
+        qp_problem_free((qp_problem_t *)current_working_problem);
     }
 
     double t_end = MPI_Wtime();
@@ -787,7 +787,7 @@ void distribute_data_partition_then_send(const qp_problem_t *working_problem,
                                          rescale_info_t *rescale_info,
                                          grid_context_t *grid_context,
                                          const pdhg_parameters_t *params,
-                                         qp_problem_t **out_local_lp,
+                                         qp_problem_t **out_local_qp,
                                          rescale_info_t **out_local_resc)
 {
     double t_start = MPI_Wtime();
@@ -817,7 +817,7 @@ void distribute_data_partition_then_send(const qp_problem_t *working_problem,
 
             if (r == 0)
             {
-                *out_local_lp = sub_qp;
+                *out_local_qp = sub_qp;
                 *out_local_resc = sub_rescale;
                 continue;
             }
@@ -870,7 +870,7 @@ void distribute_data_partition_then_send(const qp_problem_t *working_problem,
         size_t sz_lp = 0;
         big_recv_bytes((void **)&buf_lp, &sz_lp, 0, grid_context->comm_global);
         const char *ptr_lp = buf_lp;
-        *out_local_lp = deserialize_qp_problem_from_ptr(&ptr_lp);
+        *out_local_qp = deserialize_qp_problem_from_ptr(&ptr_lp);
         free(buf_lp);
 
         char *buf_resc = NULL;
