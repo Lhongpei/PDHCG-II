@@ -114,6 +114,25 @@ extern "C"
         double initial_tolerance;
         double min_tolerance;
     } inner_solver_parameters_t;
+    typedef enum
+    {
+        UNIFORM_PARTITION,
+        NNZ_BALANCE_PARTITION,
+    } partition_method_t;
+
+    typedef enum
+    {
+        NO_PERMUTATION,
+        FULL_RANDOM_PERMUTATION,
+        BLOCK_RANDOM_PERMUTATION,
+    } permute_method_t;
+
+    typedef struct
+    {
+        int row_dims;
+        int col_dims;
+        bool decided;
+    } grid_size_t;
 
     typedef struct
     {
@@ -132,6 +151,10 @@ extern "C"
         norm_type_t optimality_norm;
         inner_solver_parameters_t inner_solver_parameters;
         bool presolve;
+        partition_method_t partition_method;
+        permute_method_t permute_method;
+        grid_size_t grid_size;
+        int permute_block_size;
     } pdhg_parameters_t;
 
     typedef struct

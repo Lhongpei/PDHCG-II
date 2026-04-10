@@ -72,7 +72,8 @@ pdhcg_result_t *optimize(const pdhg_parameters_t *input_params, const qp_problem
     }
 
     rescale_info_t *rescale_info = rescale_problem(params, working_problem);
-    pdhg_solver_state_t *state = initialize_solver_state(params, working_problem, rescale_info);
+    grid_context_t *grid_context = NULL;
+    pdhg_solver_state_t *state = initialize_solver_state(params, working_problem, rescale_info, grid_context);
 
     if (state->quadratic_objective_term->nonconvexity < 0)
     {

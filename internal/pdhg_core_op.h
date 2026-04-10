@@ -25,86 +25,50 @@ limitations under the License.
 #include "utils.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
-__global__ void compute_lp_next_pdhg_primal_solution_kernel(
-    const double *current_primal, double *reflected_primal,
-    const double *dual_product, const double *objective, const double *var_lb,
-    const double *var_ub, int n, double step_size);
-__global__ void compute_lp_next_pdhg_primal_solution_major_kernel(
-    const double *current_primal, double *pdhg_primal, double *reflected_primal,
-    const double *dual_product, const double *objective, const double *var_lb,
-    const double *var_ub, int n, double step_size, double *dual_slack);
-__global__ void compute_diagonal_q_next_pdhg_primal_solution_kernel(
-    const double *current_primal, double *reflected_primal,
-    double *objective_product, const double *dual_product,
-    const double *objective, const double *var_lb, const double *var_ub, int n,
-    double step_size);
-__global__ void compute_diagonal_q_next_pdhg_primal_solution_major_kernel(
-    const double *current_primal, double *pdhg_primal, double *reflected_primal,
-    double *objective_product, const double *dual_product,
-    const double *objective, const double *var_lb, const double *var_ub, int n,
-    double step_size);
-__global__ void compute_next_pdhg_dual_solution_kernel(
-    const double *current_dual, double *reflected_dual,
-    const double *primal_product, const double *const_lb,
-    const double *const_ub, int n, double step_size);
-__global__ void compute_next_pdhg_dual_solution_major_kernel(
-    const double *current_dual, double *pdhg_dual, double *reflected_dual,
-    const double *primal_product, const double *const_lb,
-    const double *const_ub, int n, double step_size);
-__global__ void compute_delta_solution_kernel(
-    const double *initial_primal, const double *pdhg_primal,
-    double *delta_primal, const double *initial_dual, const double *pdhg_dual,
-    double *delta_dual, int n_vars, int n_cons);
-__global__ void compute_and_rescale_reduced_cost_kernel(
-    double *reduced_cost, const double *objective, const double *dual_product,
-    const double *variable_rescaling, const double objective_vector_rescaling,
-    const double constraint_bound_rescaling, int n_vars);
-void pdhg_update(pdhg_solver_state_t *state);
-void halpern_update(pdhg_solver_state_t *state, double reflection_coefficient);
+    void update_obj_product(pdhg_solver_state_t *state, double *primal_solution);
+    double compute_xQx(pdhg_solver_state_t *state, double *primal_sol, double *primal_obj_product);
+    void pdhg_update(pdhg_solver_state_t *state);
+    void halpern_update(pdhg_solver_state_t *state, double reflection_coefficient);
 
-void rescale_solution(pdhg_solver_state_t *state);
+    void rescale_solution(pdhg_solver_state_t *state);
 
-pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state,
-                                         const qp_problem_t *original_problem);
+    pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const qp_problem_t *original_problem);
 
-void perform_restart(pdhg_solver_state_t *state,
-                     const pdhg_parameters_t *params);
+    void perform_restart(pdhg_solver_state_t *state, const pdhg_parameters_t *params);
 
-void initialize_step_size_and_primal_weight(pdhg_solver_state_t *state,
-                                            const pdhg_parameters_t *params);
+    void initialize_step_size_and_primal_weight(pdhg_solver_state_t *state, const pdhg_parameters_t *params);
 
-pdhg_solver_state_t *
-initialize_solver_state(const pdhg_parameters_t *params,
-                        const qp_problem_t *original_problem,
-                        const rescale_info_t *rescale_info);
+    void compute_fixed_point_error(pdhg_solver_state_t *state);
 
-void compute_fixed_point_error(pdhg_solver_state_t *state);
+    void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm);
 
-void perform_primal_restart(pdhg_solver_state_t *state);
-void perform_dual_restart(pdhg_solver_state_t *state);
+    void compute_infeasibility_information(pdhg_solver_state_t *state);
 
-void primal_feasibility_polish(const pdhg_parameters_t *params,
-                               pdhg_solver_state_t *state,
-                               const pdhg_solver_state_t *ori_state);
-void dual_feasibility_polish(const pdhg_parameters_t *params,
-                             pdhg_solver_state_t *state,
-                             const pdhg_solver_state_t *ori_state);
+    double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
+                                           cublasHandle_t blas_handle,
+                                           const cu_sparse_matrix_csr_t *A,
+                                           const cu_sparse_matrix_csr_t *AT,
+                                           int max_iterations,
+                                           double tolerance,
+                                           struct grid_context_s *ctx);
 
-void primal_feas_polish_state_free(pdhg_solver_state_t *state);
-void dual_feas_polish_state_free(pdhg_solver_state_t *state);
+    double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
+                                       cublasHandle_t blas_handle,
+                                       const cu_sparse_matrix_csr_t *A,
+                                       int max_iterations,
+                                       double tolerance,
+                                       struct grid_context_s *ctx);
 
-void feasibility_polish(const pdhg_parameters_t *params,
-                        pdhg_solver_state_t *state);
-
-void compute_primal_fixed_point_error(pdhg_solver_state_t *state);
-void compute_dual_fixed_point_error(pdhg_solver_state_t *state);
-
-pdhg_solver_state_t *
-initialize_primal_feas_polish_state(const pdhg_solver_state_t *original_state);
-pdhg_solver_state_t *
-initialize_dual_feas_polish_state(const pdhg_solver_state_t *original_state);
+    double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
+                                       cublasHandle_t blas_handle,
+                                       const cu_sparse_matrix_csr_t *A,
+                                       double lambda_max,
+                                       int max_iterations,
+                                       double tolerance,
+                                       struct grid_context_s *ctx);
 
 #ifdef __cplusplus
 }

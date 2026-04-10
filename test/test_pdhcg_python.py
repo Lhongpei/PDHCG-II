@@ -23,7 +23,8 @@ from pdhcg import Model
 class TestPDHCGInterface(unittest.TestCase):
     def setUp(self):
         self.default_params = {
-            "LogLevel": 0,
+            "Presolve": False,
+            "LogLevel": 2,
             "OptimalityTol": 1e-6,
             "FeasibilityTol": 1e-6,
         }

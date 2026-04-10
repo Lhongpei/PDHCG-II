@@ -17,6 +17,8 @@ limitations under the License.
 
 #pragma once
 
+#include "cusparse_compat.h"
+#include "distributed_interface.h"
 #include "pdhcg_types.h"
 #include <cublas_v2.h>
 #include <cusparse.h>
@@ -53,6 +55,10 @@ typedef struct
     cusparseDnVecDescr_t vec_Rx_prod;
     cusparseDnVecDescr_t vec_RRx_prod;
     int num_rank_lowrank_obj;
+
+    // Buffer for Distributed Version
+    double *global_primal_obj_product;
+    cusparseDnVecDescr_t vec_global_primal_obj_prod;
 } quadratic_objective_term_t;
 
 typedef struct
@@ -180,11 +186,42 @@ typedef struct
 
     problem_type_t problem_type;
     inner_solver_t *inner_solver;
+    grid_context_t *grid_context;
 } pdhg_solver_state_t;
 
 typedef struct
 {
+    int num_variables;
+    int num_constraints;
+    int num_rank_lowrank_obj;
+    double *variable_lower_bound;
+    double *variable_upper_bound;
+    double *objective_vector;
+    double objective_constant;
+
+    CsrComponent *constraint_matrix;
+    int constraint_matrix_num_nonzeros;
+
+    CsrComponent *objective_sparse_matrix;
+    int objective_sparse_matrix_num_nonzeros;
+
+    CsrComponent *objective_lowrank_matrix;
+    int objective_lowrank_matrix_num_nonzeros;
+
+    double *diagonal_quad_objective;
+
+    double *constraint_lower_bound;
+    double *constraint_upper_bound;
+
+    double *primal_start;
+    double *dual_start;
+    quad_obj_type_t quad_type;
+} processed_qp_problem_t;
+
+typedef struct
+{
     qp_problem_t *scaled_problem;
+    processed_qp_problem_t *processed_problem;
     double *con_rescale;
     double *var_rescale;
     double con_bound_rescale;

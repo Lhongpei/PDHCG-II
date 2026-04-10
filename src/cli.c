@@ -29,6 +29,11 @@ limitations under the License.
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+#include "distributed_solver.h"
+#include <mpi.h>
+#endif
+
 char *get_output_path(const char *output_dir, const char *instance_name, const char *suffix)
 {
     size_t path_len = strlen(output_dir) + strlen(instance_name) + strlen(suffix) + 2;
@@ -138,74 +143,45 @@ void print_usage(const char *prog_name)
     fprintf(stderr, "Usage: %s [OPTIONS] <mps_file> <output_dir>\n\n", prog_name);
 
     fprintf(stderr, "Arguments:\n");
-    fprintf(stderr,
-            "  <mps_file>               Path to the input problem in MPS "
-            "format (.mps .QPS or .mps.gz).\n");
-    fprintf(stderr,
-            "  <output_dir>             Directory where output files "
-            "will be saved. It will contain:\n");
+    fprintf(stderr, "  <mps_file>               Path to the input problem in MPS format (.mps .QPS or .mps.gz).\n");
+    fprintf(stderr, "  <output_dir>             Directory where output files will be saved. It will contain:\n");
     fprintf(stderr, "                             - <basename>_summary.txt\n");
     fprintf(stderr, "                             - <basename>_primal_solution.txt\n");
     fprintf(stderr, "                             - <basename>_dual_solution.txt\n\n");
 
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "  -h, --help                          Display this help message.\n");
-    fprintf(stderr,
-            "  -v, --verbose <int>                 "
-            "Verbosity level: 0=silent, 1=summary, 2=detailed (default: 1).\n");
-    fprintf(stderr,
-            "      --time_limit <seconds>          "
-            "Time limit in seconds (default: 3600.0).\n");
-    fprintf(stderr, "      --iter_limit <iterations>       Iteration limit (default: %d).\n", INT32_MAX);
-    fprintf(stderr,
-            "      --eps_opt <tolerance>           "
-            "Relative optimality tolerance (default: 1e-4).\n");
-    fprintf(stderr,
-            "      --eps_feas <tolerance>          "
-            "Relative feasibility tolerance (default: 1e-4).\n");
-    fprintf(stderr,
-            "      --eps_infeas_detect <tolerance> "
-            "Infeasibility detection tolerance (default: 1e-10).\n");
-    fprintf(stderr,
-            "      --l_inf_ruiz_iter <int>         "
-            "Iterations for L-inf Ruiz rescaling (default: 10).\n");
-    fprintf(stderr,
-            "      --no_pock_chambolle             "
-            "Disable Pock-Chambolle rescaling (default: enabled).\n");
-    fprintf(stderr,
-            "      --pock_chambolle_alpha <float>  "
-            "Value for Pock-Chambolle alpha (default: 1.0).\n");
-    fprintf(stderr,
-            "      --no_bound_obj_rescaling        "
-            "Disable bound objective rescaling (default: enabled).\n");
-    fprintf(stderr,
-            "      --eval_freq <int>               "
-            "Termination evaluation frequency (default: 200).\n");
-    fprintf(stderr,
-            "      --sv_max_iter <int>             "
-            "Max iterations for singular value estimation (default: 5000).\n");
-    fprintf(stderr,
-            "      --sv_tol <float>                "
-            "Tolerance for singular value estimation (default: 1e-4).\n");
-    fprintf(stderr,
-            "      --opt_norm <norm_type>          "
-            "Norm for optimality criteria: l2 or linf (default: linf).\n");
-    fprintf(stderr,
-            "      --inner_iter_limit <int>        "
-            "Max iterations for the inner solver (default: 1000).\n");
-    fprintf(stderr,
-            "      --inner_init_tol <float>        "
-            "Initial tolerance for the inner solver (default: 1e-3).\n");
-    fprintf(stderr,
-            "      --inner_min_tol <float>         "
-            "Minimum tolerance for the inner solver (default: 1e-9).\n");
-    fprintf(stderr,
-            "      --no_presolve                   "
-            "Disable presolve (default: enabled).\n");
+    fprintf(stderr, "  -h, --help               Display this help message.\n");
+    fprintf(stderr, "  -v, --verbose <int>      Verbosity level: 0=silent, 1=summary, 2=detailed (default: 1).\n");
+    fprintf(stderr, "      --time_limit <sec>   Time limit in seconds (default: 3600.0).\n");
+    fprintf(stderr, "      --iter_limit <int>   Iteration limit (default: %d).\n", INT32_MAX);
+    fprintf(stderr, "      --eps_opt <float>    Relative optimality tolerance (default: 1e-4).\n");
+    fprintf(stderr, "      --eps_feas <float>   Relative feasibility tolerance (default: 1e-4).\n");
+    fprintf(stderr, "      --eps_infeas_detect  Infeasibility detection tolerance (default: 1e-10).\n");
+    fprintf(stderr, "      --l_inf_ruiz_iter    Iterations for L-inf Ruiz rescaling (default: 10).\n");
+    fprintf(stderr, "      --no_pock_chambolle  Disable Pock-Chambolle rescaling (default: enabled).\n");
+    fprintf(stderr, "      --pock_chambolle_alpha Value for Pock-Chambolle alpha (default: 1.0).\n");
+    fprintf(stderr, "      --no_bound_obj_rescaling Disable bound objective rescaling.\n");
+    fprintf(stderr, "      --eval_freq <int>    Termination evaluation frequency (default: 200).\n");
+    fprintf(stderr, "      --sv_max_iter <int>  Max iterations for singular value estimation (default: 5000).\n");
+    fprintf(stderr, "      --sv_tol <float>     Tolerance for singular value estimation (default: 1e-4).\n");
+    fprintf(stderr, "      --opt_norm <type>    Norm for optimality criteria: l2 or linf (default: linf).\n");
+    fprintf(stderr, "      --inner_iter_limit   Max iterations for the inner solver (default: 1000).\n");
+    fprintf(stderr, "      --inner_init_tol     Initial tolerance for the inner solver (default: 1e-3).\n");
+    fprintf(stderr, "      --inner_min_tol      Minimum tolerance for the inner solver (default: 1e-9).\n");
+    fprintf(stderr, "      --presolve <int>     Enable (1) or disable (0) presolve (default: 1).\n");
+
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+    fprintf(stderr, "\nDistributed Options (MPI & NCCL):\n");
+    fprintf(stderr, "      --grid_size r,c      Explicitly set the 2D grid dimensions (e.g., 2,4).\n");
+    fprintf(stderr, "      --partition_method   'uniform' or 'nnz' (default: nnz).\n");
+    fprintf(stderr, "      --permute_method     'none', 'random', or 'block' (default: block).\n");
+    fprintf(stderr, "      --permute_block_size Block size for block permutation (default: 256).\n");
+#endif
 }
 
 int run_pdhcg(int argc, char *argv[])
 {
+    cudaFree(0);
     pdhg_parameters_t params;
     set_default_parameters(&params);
 
@@ -229,10 +205,11 @@ int run_pdhcg(int argc, char *argv[])
                                            {"inner_iter_limit", required_argument, 0, 1015},
                                            {"inner_init_tol", required_argument, 0, 1016},
                                            {"inner_min_tol", required_argument, 0, 1017},
-                                           {"no_presolve", no_argument, 0, 1018},
+                                           {"presolve", required_argument, 0, 1018},
                                            {0, 0, 0, 0}};
 
     int opt;
+    optind = 1;
     while ((opt = getopt_long(argc, argv, "hv:fp", long_options, NULL)) != -1)
     {
         switch (opt)
@@ -243,79 +220,72 @@ int run_pdhcg(int argc, char *argv[])
             case 'v':
                 params.verbose = atoi(optarg);
                 break;
-            case 1001: // --time_limit
+            case 1001:
                 params.termination_criteria.time_sec_limit = atof(optarg);
                 break;
-            case 1002: // --iter_limit
+            case 1002:
                 params.termination_criteria.iteration_limit = atoi(optarg);
                 break;
-            case 1003: // --eps_optimal
+            case 1003:
                 params.termination_criteria.eps_optimal_relative = atof(optarg);
                 break;
-            case 1004: // --eps_feas
+            case 1004:
                 params.termination_criteria.eps_feasible_relative = atof(optarg);
                 break;
-            case 1005: // --eps_infeas_detect
+            case 1005:
                 params.termination_criteria.eps_infeasible = atof(optarg);
                 break;
-            case 1006: // --eps_feas_polish_relative
+            case 1006:
                 params.termination_criteria.eps_feas_polish_relative = atof(optarg);
                 break;
-            case 'f': // --feasibility_polishing
+            case 'f':
                 params.feasibility_polishing = true;
                 break;
-            case 1007: // --l_inf_ruiz_iter
+            case 1007:
                 params.l_inf_ruiz_iterations = atoi(optarg);
                 break;
-            case 1008: // --pock_chambolle_alpha
+            case 1008:
                 params.pock_chambolle_alpha = atof(optarg);
                 break;
-            case 1009: // --no_pock_chambolle
+            case 1009:
                 params.has_pock_chambolle_alpha = false;
                 break;
-            case 1010: // --no_bound_obj_rescaling
+            case 1010:
                 params.bound_objective_rescaling = false;
                 break;
-            case 1011: // --sv_max_iter
+            case 1011:
                 params.sv_max_iter = atoi(optarg);
                 break;
-            case 1012: // --sv_tol
+            case 1012:
                 params.sv_tol = atof(optarg);
                 break;
-            case 1013: // --eval_freq
+            case 1013:
                 params.termination_evaluation_frequency = atoi(optarg);
                 break;
-            case 1014: // --opt_norm
-            {
-                const char *norm_str = optarg;
-                if (strcmp(norm_str, "l2") == 0)
-                {
+            case 1014:
+                if (strcmp(optarg, "l2") == 0)
                     params.optimality_norm = NORM_TYPE_L2;
-                }
-                else if (strcmp(norm_str, "linf") == 0)
-                {
+                else if (strcmp(optarg, "linf") == 0)
                     params.optimality_norm = NORM_TYPE_L_INF;
-                }
                 else
                 {
                     fprintf(stderr, "Error: opt_norm must be 'l2' or 'linf'\n");
                     return 1;
                 }
-            }
-            break;
-            case 1015: // --inner_iter_limit
+                break;
+            case 1015:
                 params.inner_solver_parameters.iteration_limit = atoi(optarg);
                 break;
-            case 1016: // --inner_init_tol
+            case 1016:
                 params.inner_solver_parameters.initial_tolerance = atof(optarg);
                 break;
-            case 1017: // --inner_min_tol
+            case 1017:
                 params.inner_solver_parameters.min_tolerance = atof(optarg);
                 break;
-            case 1018: // --no_presolve
-                params.presolve = false;
+            case 1018:
+                params.presolve = (atoi(optarg) != 0);
                 break;
-            case '?': // Unknown option
+            case '?':
                 return 1;
         }
     }
@@ -330,23 +300,18 @@ int run_pdhcg(int argc, char *argv[])
     const char *filename = argv[optind];
     const char *output_dir = argv[optind + 1];
 
-    // Warm up CUDA context early to avoid delay during solver initialization
-    cudaFree(0);
-
     char *instance_name = extract_instance_name(filename);
     if (instance_name == NULL)
-    {
         return 1;
-    }
 
     qp_problem_t *problem = read_mps_file(filename);
-
     if (problem == NULL)
     {
         fprintf(stderr, "Failed to read or parse the file.\n");
         free(instance_name);
         return 1;
     }
+
     pdhcg_result_t *result = optimize(&params, problem);
 
     if (result == NULL)
@@ -368,7 +333,305 @@ int run_pdhcg(int argc, char *argv[])
     return 0;
 }
 
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+int run_d_pdhcg(int argc, char *argv[])
+{
+    int mpi_initialized = 0;
+    MPI_Initialized(&mpi_initialized);
+    if (!mpi_initialized)
+    {
+        MPI_Init(&argc, &argv);
+    }
+
+    int rank_global, world_size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank_global);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    pdhg_parameters_t params;
+    set_default_parameters(&params);
+
+    params.grid_size.row_dims = 0;
+    params.grid_size.col_dims = 0;
+    params.grid_size.decided = false;
+    params.permute_block_size = 256;
+
+    static struct option long_options[] = {{"help", no_argument, 0, 'h'},
+                                           {"verbose", required_argument, 0, 'v'},
+                                           {"time_limit", required_argument, 0, 1001},
+                                           {"iter_limit", required_argument, 0, 1002},
+                                           {"eps_opt", required_argument, 0, 1003},
+                                           {"eps_feas", required_argument, 0, 1004},
+                                           {"eps_infeas_detect", required_argument, 0, 1005},
+                                           {"eps_feas_polish", required_argument, 0, 1006},
+                                           {"feasibility_polishing", no_argument, 0, 'f'},
+                                           {"l_inf_ruiz_iter", required_argument, 0, 1007},
+                                           {"pock_chambolle_alpha", required_argument, 0, 1008},
+                                           {"no_pock_chambolle", no_argument, 0, 1009},
+                                           {"no_bound_obj_rescaling", no_argument, 0, 1010},
+                                           {"sv_max_iter", required_argument, 0, 1011},
+                                           {"sv_tol", required_argument, 0, 1012},
+                                           {"eval_freq", required_argument, 0, 1013},
+                                           {"opt_norm", required_argument, 0, 1014},
+                                           {"inner_iter_limit", required_argument, 0, 1015},
+                                           {"inner_init_tol", required_argument, 0, 1016},
+                                           {"inner_min_tol", required_argument, 0, 1017},
+                                           {"presolve", required_argument, 0, 1018},
+                                           {"grid_size", required_argument, 0, 2001},
+                                           {"partition_method", required_argument, 0, 2002},
+                                           {"permute_method", required_argument, 0, 2003},
+                                           {"permute_block_size", required_argument, 0, 2004},
+                                           {0, 0, 0, 0}};
+
+    int opt;
+    optind = 1;
+    while ((opt = getopt_long(argc, argv, "hv:fp", long_options, NULL)) != -1)
+    {
+        switch (opt)
+        {
+            case 'h':
+                if (rank_global == 0)
+                    print_usage(argv[0]);
+                MPI_Finalize();
+                return 0;
+            case 'v':
+                params.verbose = atoi(optarg);
+                break;
+            case 1001:
+                params.termination_criteria.time_sec_limit = atof(optarg);
+                break;
+            case 1002:
+                params.termination_criteria.iteration_limit = atoi(optarg);
+                break;
+            case 1003:
+                params.termination_criteria.eps_optimal_relative = atof(optarg);
+                break;
+            case 1004:
+                params.termination_criteria.eps_feasible_relative = atof(optarg);
+                break;
+            case 1005:
+                params.termination_criteria.eps_infeasible = atof(optarg);
+                break;
+            case 1006:
+                params.termination_criteria.eps_feas_polish_relative = atof(optarg);
+                break;
+            case 'f':
+                params.feasibility_polishing = true;
+                break;
+            case 1007:
+                params.l_inf_ruiz_iterations = atoi(optarg);
+                break;
+            case 1008:
+                params.pock_chambolle_alpha = atof(optarg);
+                break;
+            case 1009:
+                params.has_pock_chambolle_alpha = false;
+                break;
+            case 1010:
+                params.bound_objective_rescaling = false;
+                break;
+            case 1011:
+                params.sv_max_iter = atoi(optarg);
+                break;
+            case 1012:
+                params.sv_tol = atof(optarg);
+                break;
+            case 1013:
+                params.termination_evaluation_frequency = atoi(optarg);
+                break;
+            case 1014:
+                if (strcmp(optarg, "l2") == 0)
+                    params.optimality_norm = NORM_TYPE_L2;
+                else if (strcmp(optarg, "linf") == 0)
+                    params.optimality_norm = NORM_TYPE_L_INF;
+                else
+                {
+                    if (rank_global == 0)
+                        fprintf(stderr, "Error: opt_norm must be 'l2' or 'linf'\n");
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                }
+                break;
+            case 1015:
+                params.inner_solver_parameters.iteration_limit = atoi(optarg);
+                break;
+            case 1016:
+                params.inner_solver_parameters.initial_tolerance = atof(optarg);
+                break;
+            case 1017:
+                params.inner_solver_parameters.min_tolerance = atof(optarg);
+                break;
+            case 1018:
+                params.presolve = (atoi(optarg) != 0);
+                break;
+            case 2001: // --grid_size r,c
+            {
+                int r, c;
+                if (sscanf(optarg, "%d,%d", &r, &c) == 2 && r > 0 && c > 0)
+                {
+                    if (r * c != world_size)
+                    {
+                        if (rank_global == 0)
+                        {
+                            fprintf(stderr, "\n[FATAL ERROR] MPI Grid Configuration Mismatch\n");
+                            fprintf(stderr, "Command line input : --grid_size %s (Total: %d)\n", optarg, r * c);
+                            fprintf(stderr, "MPI Runtime size   : -n %d\n", world_size);
+                        }
+                        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                    }
+                    params.grid_size.row_dims = r;
+                    params.grid_size.col_dims = c;
+                    params.grid_size.decided = true;
+                }
+                else
+                {
+                    if (rank_global == 0)
+                        fprintf(stderr, "Error: Invalid grid_size format. Use r,c\n");
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                }
+                break;
+            }
+            case 2002: // --partition_method
+            {
+                if (strcmp(optarg, "uniform") == 0)
+                    params.partition_method = UNIFORM_PARTITION;
+                else if (strcmp(optarg, "nnz") == 0 || strcmp(optarg, "nnz_balance") == 0)
+                    params.partition_method = NNZ_BALANCE_PARTITION;
+                else
+                {
+                    if (rank_global == 0)
+                        fprintf(stderr, "Error: partition_method must be 'uniform' or 'nnz'\n");
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                }
+                break;
+            }
+            case 2003: // --permute_method
+            {
+                if (strcmp(optarg, "none") == 0 || strcmp(optarg, "no") == 0)
+                    params.permute_method = NO_PERMUTATION;
+                else if (strcmp(optarg, "random") == 0 || strcmp(optarg, "full") == 0)
+                    params.permute_method = FULL_RANDOM_PERMUTATION;
+                else if (strcmp(optarg, "block") == 0)
+                    params.permute_method = BLOCK_RANDOM_PERMUTATION;
+                else
+                {
+                    if (rank_global == 0)
+                        fprintf(stderr, "Error: permute_method must be 'none', 'random', or 'block'\n");
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                }
+                break;
+            }
+            case 2004: // --permute_block_size
+            {
+                params.permute_block_size = atoi(optarg);
+                if (params.permute_block_size <= 0)
+                {
+                    if (rank_global == 0)
+                        fprintf(stderr, "Error: permute_block_size must be positive.\n");
+                    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                }
+                break;
+            }
+            case '?':
+                MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+                return 1;
+        }
+    }
+
+    if (argc - optind != 2)
+    {
+        if (rank_global == 0)
+        {
+            fprintf(stderr, "Error: You must specify an input file and an output directory.\n");
+            print_usage(argv[0]);
+        }
+        MPI_Finalize();
+        return 1;
+    }
+
+    const char *filename = argv[optind];
+    const char *output_dir = argv[optind + 1];
+
+    char *instance_name = extract_instance_name(filename);
+    if (instance_name == NULL)
+    {
+        if (rank_global == 0)
+            fprintf(stderr, "Error: Could not extract instance name from filename.\n");
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+        return 1;
+    }
+
+    qp_problem_t *problem = NULL;
+
+    if (rank_global == 0)
+    {
+        if (params.verbose)
+            printf("Rank 0: Loading MPS file '%s'...\n", filename);
+        problem = read_mps_file(filename);
+
+        if (problem == NULL)
+        {
+            fprintf(stderr, "Rank 0: Failed to read or parse the file.\n");
+            MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+            return 1;
+        }
+    }
+
+    pdhcg_result_t *result = distributed_optimize(&params, problem);
+
+    if (rank_global == 0)
+    {
+        if (result == NULL)
+        {
+            fprintf(stderr, "Solver failed (returned NULL result).\n");
+        }
+        else
+        {
+            save_solver_summary(result, output_dir, instance_name);
+            save_solution(
+                result->primal_solution, result->num_variables, output_dir, instance_name, "_primal_solution.txt");
+            save_solution(
+                result->dual_solution, result->num_constraints, output_dir, instance_name, "_dual_solution.txt");
+            pdhcg_result_free(result);
+        }
+        if (problem)
+            qp_problem_free(problem);
+    }
+    else
+    {
+        if (result)
+            pdhcg_result_free(result);
+    }
+
+    free(instance_name);
+    MPI_Finalize();
+    return 0;
+}
+#endif // PDHCG_COMPILE_DISTRIBUTED
+
+int is_running_under_mpi()
+{
+    if (getenv("OMPI_COMM_WORLD_RANK") != NULL)
+        return 1;
+    if (getenv("PMI_RANK") != NULL)
+        return 1;
+    if (getenv("PMI_SIZE") != NULL)
+        return 1;
+    if (getenv("I_MPI_RANK") != NULL)
+        return 1;
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
-    run_pdhcg(argc, argv);
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+    if (is_running_under_mpi())
+    {
+        return run_d_pdhcg(argc, argv);
+    }
+    else
+    {
+        return run_pdhcg(argc, argv);
+    }
+#else
+    return run_pdhcg(argc, argv);
+#endif
 }

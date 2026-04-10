@@ -362,6 +362,87 @@ rescale_info_t *rescale_problem(const pdhg_parameters_t *params, const qp_proble
         rescale_info->con_bound_rescale = 1.0;
         rescale_info->obj_vec_rescale = 1.0;
     }
+    rescale_info->processed_problem = preprocess_qp_problem(rescale_info->scaled_problem);
     rescale_info->rescaling_time_sec = (double)(clock() - start_rescaling) / CLOCKS_PER_SEC;
     return rescale_info;
+}
+
+processed_qp_problem_t *preprocess_qp_problem(const qp_problem_t *raw_problem)
+{
+    if (raw_problem == NULL)
+        return NULL;
+
+    processed_qp_problem_t *processed = (processed_qp_problem_t *)safe_calloc(1, sizeof(processed_qp_problem_t));
+
+    processed->num_variables = raw_problem->num_variables;
+    processed->num_constraints = raw_problem->num_constraints;
+    processed->num_rank_lowrank_obj = raw_problem->num_rank_lowrank_obj;
+    processed->objective_constant = raw_problem->objective_constant;
+
+    processed->constraint_matrix_num_nonzeros = raw_problem->constraint_matrix_num_nonzeros;
+    processed->objective_sparse_matrix_num_nonzeros = raw_problem->objective_sparse_matrix_num_nonzeros;
+    processed->objective_lowrank_matrix_num_nonzeros = raw_problem->objective_lowrank_matrix_num_nonzeros;
+
+    processed->variable_lower_bound = raw_problem->variable_lower_bound;
+    processed->variable_upper_bound = raw_problem->variable_upper_bound;
+    processed->objective_vector = raw_problem->objective_vector;
+    processed->constraint_lower_bound = raw_problem->constraint_lower_bound;
+    processed->constraint_upper_bound = raw_problem->constraint_upper_bound;
+    processed->primal_start = raw_problem->primal_start;
+    processed->dual_start = raw_problem->dual_start;
+    processed->constraint_matrix = raw_problem->constraint_matrix;
+    processed->objective_sparse_matrix = raw_problem->objective_sparse_matrix;
+    processed->objective_lowrank_matrix = raw_problem->objective_lowrank_matrix;
+
+    if ((!raw_problem->objective_sparse_matrix || raw_problem->objective_sparse_matrix_num_nonzeros == 0) &&
+        (!raw_problem->objective_lowrank_matrix || raw_problem->objective_lowrank_matrix_num_nonzeros == 0))
+    {
+        processed->quad_type = PDHCG_NON_Q;
+    }
+    else
+    {
+        processed->quad_type = detect_q_type(raw_problem->objective_sparse_matrix,
+                                             raw_problem->objective_lowrank_matrix,
+                                             raw_problem->num_variables,
+                                             raw_problem->num_rank_lowrank_obj);
+    }
+
+    processed->diagonal_quad_objective = NULL;
+    if (processed->quad_type == PDHCG_DIAG_Q)
+    {
+        int n = processed->num_variables;
+        processed->diagonal_quad_objective = (double *)safe_calloc(n, sizeof(double));
+
+        CsrComponent *csr = processed->objective_sparse_matrix;
+        if (csr && csr->row_ptr && csr->col_ind && csr->val)
+        {
+            for (int i = 0; i < n; ++i)
+            {
+                for (int k = csr->row_ptr[i]; k < csr->row_ptr[i + 1]; ++k)
+                {
+                    int col = csr->col_ind[k];
+                    if (col < n)
+                    {
+                        processed->diagonal_quad_objective[col] = csr->val[k] + 1e-12;
+                    }
+                }
+            }
+        }
+    }
+
+    return processed;
+}
+
+void free_processed_qp_problem(processed_qp_problem_t *processed)
+{
+    if (processed == NULL)
+        return;
+
+    if (processed->diagonal_quad_objective != NULL)
+    {
+        free(processed->diagonal_quad_objective);
+        processed->diagonal_quad_objective = NULL;
+    }
+
+    free(processed);
 }
