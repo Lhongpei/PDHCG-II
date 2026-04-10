@@ -28,6 +28,7 @@ limitations under the License.
 extern "C"
 {
 #endif
+    int get_global_n(pdhg_solver_state_t *state);
     void initialize_step_size_and_primal_weight(pdhg_solver_state_t *state, const pdhg_parameters_t *params);
 
     pdhg_solver_state_t *initialize_solver_state(const pdhg_parameters_t *params,

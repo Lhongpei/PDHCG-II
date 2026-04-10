@@ -26,6 +26,7 @@ struct grid_context_s
     MPI_Comm comm_col;
     ncclComm_t nccl_row;
     ncclComm_t nccl_col;
+    ncclComm_t nccl_global;
     int rank_global;
     int coords[2];
     int dims[2];

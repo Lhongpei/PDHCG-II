@@ -536,3 +536,38 @@ dual_objective_dual_slack_contribution_array_kernel(const double *dual_slack,
             fmin(-dual_slack[i], 0.0) * variable_upper_bound_finite_val[i];
     }
 }
+
+__global__ void compute_and_rescale_reduced_cost_qp_kernel(double *__restrict__ reduced_cost,
+                                                           const double *__restrict__ objective,
+                                                           const double *__restrict__ quadratic_product,
+                                                           const double *__restrict__ dual_product,
+                                                           const double *__restrict__ variable_rescaling,
+                                                           const double objective_vector_rescaling,
+                                                           const double constraint_bound_rescaling,
+                                                           const double *__restrict__ variable_lower_bound,
+                                                           const double *__restrict__ variable_upper_bound,
+                                                           int n_vars)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n_vars)
+    {
+        double grad_i = objective[i];
+        if (quadratic_product != NULL)
+        {
+            grad_i += quadratic_product[i];
+        }
+
+        double rc = (grad_i - dual_product[i]) * variable_rescaling[i] / objective_vector_rescaling;
+
+        if (!isfinite(variable_lower_bound[i]))
+        {
+            rc = fmin(rc, 0.0);
+        }
+        if (!isfinite(variable_upper_bound[i]))
+        {
+            rc = fmax(rc, 0.0);
+        }
+
+        reduced_cost[i] = rc;
+    }
+}

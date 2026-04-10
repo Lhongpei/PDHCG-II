@@ -15,6 +15,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+#include "distributed_interface.h"
 #include "internal_types.h"
 #include "pdhcg.h"
 #include "pdhcg_kernels.cuh"
@@ -31,6 +32,10 @@ limitations under the License.
 #include <stdio.h>
 #include <time.h>
 
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+#include "distributed_types.h"
+#endif
+
 void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
 {
     switch (state->quadratic_objective_term->quad_obj_type)
@@ -39,18 +44,24 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
             return;
         case PDHCG_SPARSE_Q:
             CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, primal_solution));
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->quadratic_objective_term->vec_primal_obj_prod,
-                                                  state->quadratic_objective_term->primal_obj_product));
+            CUSPARSE_CHECK(cusparseDnVecSetValues(state->quadratic_objective_term->vec_global_primal_obj_prod,
+                                                  state->quadratic_objective_term->global_primal_obj_product));
             CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
                                         CUSPARSE_OPERATION_NON_TRANSPOSE,
                                         &HOST_ONE,
                                         state->quadratic_objective_term->matQ,
                                         state->vec_primal_sol,
                                         &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_primal_obj_prod,
+                                        state->quadratic_objective_term->vec_global_primal_obj_prod,
                                         CUDA_R_64F,
                                         CUSPARSE_SPMV_CSR_ALG2,
                                         state->quadratic_objective_term->primal_obj_spmv_buffer));
+            pdhcg_all_reduce_array(state->grid_context,
+                                   state->quadratic_objective_term->global_primal_obj_product,
+                                   get_global_n(state),
+                                   PDHCG_OP_SUM,
+                                   PDHCG_SCOPE_GLOBAL,
+                                   0);
             return;
         case PDHCG_DIAG_Q:
             element_wise_mul_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
@@ -71,6 +82,14 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
                                         CUDA_R_64F,
                                         CUSPARSE_SPMV_CSR_ALG2,
                                         state->quadratic_objective_term->Rx_spmv_buffer));
+
+            pdhcg_all_reduce_array(state->grid_context,
+                                   state->quadratic_objective_term->Rx_product,
+                                   state->quadratic_objective_term->num_rank_lowrank_obj,
+                                   PDHCG_OP_SUM,
+                                   PDHCG_SCOPE_GLOBAL,
+                                   0);
+
             CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
                                         CUSPARSE_OPERATION_NON_TRANSPOSE,
                                         &HOST_ONE,
@@ -91,10 +110,17 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
                                         state->quadratic_objective_term->matQ,
                                         state->vec_primal_sol,
                                         &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_primal_obj_prod,
+                                        state->quadratic_objective_term->vec_global_primal_obj_prod,
                                         CUDA_R_64F,
                                         CUSPARSE_SPMV_CSR_ALG2,
                                         state->quadratic_objective_term->primal_obj_spmv_buffer));
+
+            pdhcg_all_reduce_array(state->grid_context,
+                                   state->quadratic_objective_term->global_primal_obj_product,
+                                   get_global_n(state),
+                                   PDHCG_OP_SUM,
+                                   PDHCG_SCOPE_GLOBAL,
+                                   0);
 
             CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
                                         CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -106,6 +132,13 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
                                         CUDA_R_64F,
                                         CUSPARSE_SPMV_CSR_ALG2,
                                         state->quadratic_objective_term->Rx_spmv_buffer));
+
+            pdhcg_all_reduce_array(state->grid_context,
+                                   state->quadratic_objective_term->Rx_product,
+                                   state->quadratic_objective_term->num_rank_lowrank_obj,
+                                   PDHCG_OP_SUM,
+                                   PDHCG_SCOPE_GLOBAL,
+                                   0);
 
             CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
                                         CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -132,6 +165,7 @@ double compute_xQx(pdhg_solver_state_t *state, double *primal_sol, double *prima
 
     double xQx = 0.0;
     CUBLAS_CHECK(cublasDdot(state->blas_handle, state->num_variables, primal_sol, 1, primal_obj_product, 1, &xQx));
+    pdhcg_all_reduce_scalar(state->grid_context, &xQx, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
     return xQx;
 }
 
@@ -195,6 +229,10 @@ void diag_q_primal_update(pdhg_solver_state_t *state, double step_size)
             step_size);
     }
 }
+static __global__ void sqrt_scalar_kernel(double *val)
+{
+    *val = sqrt(*val);
+}
 
 void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
 {
@@ -227,9 +265,17 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
 
     while (inner_solver_iter < state->inner_solver->iteration_limit)
     {
+        CUBLAS_CHECK(cublasDdot(state->blas_handle,
+                                state->num_variables,
+                                state->inner_solver->bb_step_size->direction,
+                                1,
+                                state->inner_solver->bb_step_size->direction,
+                                1,
+                                d_norm_gtg));
 
-        CUBLAS_CHECK(cublasDnrm2_v2_64(
-            state->blas_handle, state->num_variables, state->inner_solver->bb_step_size->direction, 1, d_norm_gtg));
+        pdhcg_all_reduce_scalar(state->grid_context, d_norm_gtg, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, true);
+
+        sqrt_scalar_kernel<<<1, 1>>>(d_norm_gtg);
 
         if (inner_solver_iter == 1 || inner_solver_iter % check_frequency == 0)
         {
@@ -249,6 +295,7 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
             state->inner_solver->primal_buffer,
             inv_step_size,
             state->num_variables);
+
         CUBLAS_CHECK(cublasDdot(state->blas_handle,
                                 state->num_variables,
                                 state->inner_solver->bb_step_size->direction,
@@ -257,7 +304,10 @@ void primal_BB_step_size_update(pdhg_solver_state_t *state, double step_size)
                                 1,
                                 d_tmp));
 
+        pdhcg_all_reduce_scalar(state->grid_context, d_tmp, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, true);
+
         compute_bb_alpha_safeguard_kernel<<<1, 1>>>(d_norm_gtg, d_tmp, d_alpha);
+
         primal_bb_update_direction_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
             state->pdhg_primal_solution,
             state->inner_solver->bb_step_size->gradient,
@@ -377,6 +427,9 @@ void pdhg_update(pdhg_solver_state_t *state)
                                 CUSPARSE_SPMV_CSR_ALG2,
                                 state->primal_spmv_buffer));
 
+    pdhcg_all_reduce_array(
+        state->grid_context, state->primal_product, state->num_constraints, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, 0);
+
     if (state->is_this_major_iteration || ((state->total_count + 2) % get_print_frequency(state->total_count + 2)) == 0)
     {
         compute_next_pdhg_dual_solution_major_kernel<<<state->num_blocks_dual, THREADS_PER_BLOCK>>>(
@@ -446,6 +499,10 @@ void perform_restart(pdhg_solver_state_t *state, const pdhg_parameters_t *params
     CUBLAS_CHECK(
         cublasDnrm2_v2_64(state->blas_handle, state->num_constraints, state->delta_dual_solution, 1, &dual_dist));
 
+    double primal_dist_sq = primal_dist * primal_dist;
+    pdhcg_all_reduce_scalar(state->grid_context, &primal_dist_sq, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+    primal_dist = sqrt(primal_dist_sq);
+
     double ratio_infeas = state->relative_dual_residual / state->relative_primal_residual;
 
     if (primal_dist > 1e-16 && dual_dist > 1e-16 && primal_dist < 1e12 && dual_dist < 1e12 && ratio_infeas > 1e-8 &&
@@ -508,7 +565,8 @@ void initialize_step_size_and_primal_weight(pdhg_solver_state_t *state, const pd
                                                         state->constraint_matrix,
                                                         state->constraint_matrix_t,
                                                         params->sv_max_iter,
-                                                        params->sv_tol);
+                                                        params->sv_tol,
+                                                        state->grid_context);
         if (max_sv < 1e-12)
         {
             state->step_size = 1.0;
@@ -566,6 +624,11 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
         cublasDnrm2_v2_64(state->blas_handle, state->num_constraints, state->delta_dual_solution, 1, &dual_norm));
     CUBLAS_CHECK(
         cublasDnrm2_v2_64(state->blas_handle, state->num_variables, state->delta_primal_solution, 1, &primal_norm));
+
+    double primal_norm_sq = primal_norm * primal_norm;
+    pdhcg_all_reduce_scalar(state->grid_context, &primal_norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+    primal_norm = sqrt(primal_norm_sq);
+
     movement = primal_norm * primal_norm * state->primal_weight + dual_norm * dual_norm / state->primal_weight;
 
     CUBLAS_CHECK(cublasDdot(state->blas_handle,
@@ -575,6 +638,9 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
                             state->delta_primal_solution,
                             1,
                             &cross_term));
+
+    pdhcg_all_reduce_scalar(state->grid_context, &cross_term, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+
     interaction = 2 * state->step_size * cross_term;
 
     state->fixed_point_error = sqrt(movement + interaction);
@@ -585,41 +651,6 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
         state->inner_solver->tol =
             fmin(state->inner_solver->tol,
                  fmax(0.0005 * primal_norm / state->step_size * state->primal_weight, state->inner_solver->min_tol));
-    }
-}
-
-__global__ void compute_and_rescale_reduced_cost_qp_kernel(double *__restrict__ reduced_cost,
-                                                           const double *__restrict__ objective,
-                                                           const double *__restrict__ quadratic_product,
-                                                           const double *__restrict__ dual_product,
-                                                           const double *__restrict__ variable_rescaling,
-                                                           const double objective_vector_rescaling,
-                                                           const double constraint_bound_rescaling,
-                                                           const double *__restrict__ variable_lower_bound,
-                                                           const double *__restrict__ variable_upper_bound,
-                                                           int n_vars)
-{
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n_vars)
-    {
-        double grad_i = objective[i];
-        if (quadratic_product != NULL)
-        {
-            grad_i += quadratic_product[i];
-        }
-
-        double rc = (grad_i - dual_product[i]) * variable_rescaling[i] / objective_vector_rescaling;
-
-        if (!isfinite(variable_lower_bound[i]))
-        {
-            rc = fmin(rc, 0.0);
-        }
-        if (!isfinite(variable_upper_bound[i]))
-        {
-            rc = fmax(rc, 0.0);
-        }
-
-        reduced_cost[i] = rc;
     }
 }
 
@@ -640,6 +671,9 @@ void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm)
                                 CUDA_R_64F,
                                 CUSPARSE_SPMV_CSR_ALG2,
                                 state->primal_spmv_buffer));
+
+    pdhcg_all_reduce_array(
+        state->grid_context, state->primal_product, state->num_constraints, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, 0);
 
     CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
                                 CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -710,20 +744,24 @@ void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm)
         CUBLAS_CHECK(cublasDnrm2_v2_64(
             state->blas_handle, state->num_constraints, state->primal_residual, 1, &state->absolute_primal_residual));
     }
-
     state->absolute_primal_residual /= state->constraint_bound_rescaling;
 
     if (optimality_norm == NORM_TYPE_L_INF)
     {
         state->absolute_dual_residual =
             get_vector_inf_norm(state->blas_handle, state->num_variables, state->dual_residual);
+        pdhcg_all_reduce_scalar(
+            state->grid_context, &state->absolute_dual_residual, PDHCG_OP_MAX, PDHCG_SCOPE_GLOBAL, false);
     }
     else
     {
         CUBLAS_CHECK(cublasDnrm2_v2_64(
             state->blas_handle, state->num_variables, state->dual_residual, 1, &state->absolute_dual_residual));
+        state->absolute_dual_residual *= state->absolute_dual_residual;
+        pdhcg_all_reduce_scalar(
+            state->grid_context, &state->absolute_dual_residual, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+        state->absolute_dual_residual = sqrt(state->absolute_dual_residual);
     }
-
     state->absolute_dual_residual /= state->objective_vector_rescaling;
 
     double half_xQx =
@@ -736,6 +774,10 @@ void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm)
                             state->pdhg_primal_solution,
                             1,
                             &state->primal_objective_value));
+
+    pdhcg_all_reduce_scalar(
+        state->grid_context, &state->primal_objective_value, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+
     state->primal_objective_value = (state->primal_objective_value + half_xQx) /
             (state->constraint_bound_rescaling * state->objective_vector_rescaling) +
         state->objective_constant;
@@ -748,11 +790,16 @@ void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm)
                             state->pdhg_primal_solution,
                             1,
                             &base_dual_objective));
+
+    pdhcg_all_reduce_scalar(state->grid_context, &base_dual_objective, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+
     double dual_slack_sum =
         get_vector_sum(state->blas_handle, state->num_constraints, state->ones_dual_d, state->primal_slack);
+
     state->dual_objective_value = (base_dual_objective + dual_slack_sum - half_xQx) /
             (state->constraint_bound_rescaling * state->objective_vector_rescaling) +
         state->objective_constant;
+
     double relative_primal_dominator = 1.0 + state->constraint_bound_norm;
     state->relative_primal_residual = state->absolute_primal_residual / relative_primal_dominator;
 
@@ -773,6 +820,7 @@ void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm)
         {
             qx_norm = get_vector_inf_norm(
                 state->blas_handle, state->num_variables, state->quadratic_objective_term->primal_obj_product);
+            pdhcg_all_reduce_scalar(state->grid_context, &qx_norm, PDHCG_OP_MAX, PDHCG_SCOPE_GLOBAL, false);
         }
         else
         {
@@ -781,15 +829,22 @@ void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm)
                                            state->quadratic_objective_term->primal_obj_product,
                                            1,
                                            &qx_norm));
+            qx_norm *= qx_norm;
+            pdhcg_all_reduce_scalar(state->grid_context, &qx_norm, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+            qx_norm = sqrt(qx_norm);
         }
         double Ay_norm;
         if (optimality_norm == NORM_TYPE_L_INF)
         {
             Ay_norm = get_vector_inf_norm(state->blas_handle, state->num_variables, state->dual_product);
+            pdhcg_all_reduce_scalar(state->grid_context, &Ay_norm, PDHCG_OP_MAX, PDHCG_SCOPE_GLOBAL, false);
         }
         else
         {
             CUBLAS_CHECK(cublasDnrm2_v2_64(state->blas_handle, state->num_variables, state->dual_product, 1, &Ay_norm));
+            Ay_norm *= Ay_norm;
+            pdhcg_all_reduce_scalar(state->grid_context, &Ay_norm, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+            Ay_norm = sqrt(Ay_norm);
         }
         relative_dual_dominator = 1.0 +
             fmax(state->objective_vector_norm,
@@ -814,6 +869,9 @@ void compute_infeasibility_information(pdhg_solver_state_t *state)
 
     double primal_ray_inf_norm =
         get_vector_inf_norm(state->blas_handle, state->num_variables, state->delta_primal_solution);
+
+    pdhcg_all_reduce_scalar(state->grid_context, &primal_ray_inf_norm, PDHCG_OP_MAX, PDHCG_SCOPE_GLOBAL, false);
+
     if (primal_ray_inf_norm > 0.0)
     {
         double scale = 1.0 / primal_ray_inf_norm;
@@ -838,6 +896,9 @@ void compute_infeasibility_information(pdhg_solver_state_t *state)
                                 CUSPARSE_SPMV_CSR_ALG2,
                                 state->primal_spmv_buffer));
 
+    pdhcg_all_reduce_array(
+        state->grid_context, state->primal_product, state->num_constraints, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, 0);
+
     CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
                                 CUSPARSE_OPERATION_NON_TRANSPOSE,
                                 &HOST_ONE,
@@ -856,6 +917,9 @@ void compute_infeasibility_information(pdhg_solver_state_t *state)
                             state->delta_primal_solution,
                             1,
                             &state->primal_ray_linear_objective));
+
+    pdhcg_all_reduce_scalar(
+        state->grid_context, &state->primal_ray_linear_objective, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
     state->primal_ray_linear_objective /= (state->constraint_bound_rescaling * state->objective_vector_rescaling);
 
     dual_solution_dual_objective_contribution_kernel<<<state->num_blocks_dual, THREADS_PER_BLOCK>>>(
@@ -876,6 +940,9 @@ void compute_infeasibility_information(pdhg_solver_state_t *state)
         get_vector_sum(state->blas_handle, state->num_constraints, state->ones_dual_d, state->primal_slack);
     double sum_dual_slack =
         get_vector_sum(state->blas_handle, state->num_variables, state->ones_primal_d, state->dual_slack);
+
+    pdhcg_all_reduce_scalar(state->grid_context, &sum_dual_slack, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+
     state->dual_ray_objective =
         (sum_primal_slack + sum_dual_slack) / (state->constraint_bound_rescaling * state->objective_vector_rescaling);
 
@@ -900,11 +967,16 @@ void compute_infeasibility_information(pdhg_solver_state_t *state)
         update_obj_product(state, state->delta_primal_solution);
         double q_ray_norm = get_vector_inf_norm(
             state->blas_handle, state->num_variables, state->quadratic_objective_term->primal_obj_product);
+
+        pdhcg_all_reduce_scalar(state->grid_context, &q_ray_norm, PDHCG_OP_MAX, PDHCG_SCOPE_GLOBAL, false);
+
         double scaled_q_norm = q_ray_norm / state->objective_vector_rescaling;
         state->max_primal_ray_infeasibility = fmax(state->max_primal_ray_infeasibility, scaled_q_norm);
     }
 
     double dual_slack_norm = get_vector_inf_norm(state->blas_handle, state->num_variables, state->dual_slack);
+
+    pdhcg_all_reduce_scalar(state->grid_context, &dual_slack_norm, PDHCG_OP_MAX, PDHCG_SCOPE_GLOBAL, false);
     state->max_dual_ray_infeasibility = dual_slack_norm;
 
     double scaling_factor = fmax(dual_ray_inf_norm, dual_slack_norm);
@@ -924,7 +996,6 @@ pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const qp_pr
 {
     pdhcg_result_t *results = (pdhcg_result_t *)safe_calloc(1, sizeof(pdhcg_result_t));
 
-    // Compute reduced cost
     CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol, state->pdhg_dual_solution));
     CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product));
 
@@ -1000,23 +1071,31 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
                                        const cu_sparse_matrix_csr_t *A,
                                        const cu_sparse_matrix_csr_t *AT,
                                        int max_iterations,
-                                       double tolerance)
+                                       double tolerance,
+                                       struct grid_context_s *ctx)
 {
     int m = A->num_rows;
     int n = A->num_cols;
+
+    int P_col = pdhcg_get_grid_p_col(ctx);
+    int row_coord = pdhcg_get_grid_row_coord(ctx);
+
+    int safe_m = m > 0 ? m : 1;
+    int safe_n = n > 0 ? n : 1;
     double *eigenvector_d, *next_eigenvector_d, *dual_product_d;
 
-    CUDA_CHECK(cudaMalloc(&eigenvector_d, m * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&next_eigenvector_d, m * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&dual_product_d, n * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&eigenvector_d, safe_m * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&next_eigenvector_d, safe_m * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&dual_product_d, safe_n * sizeof(double)));
 
-    double *eigenvector_h = (double *)safe_malloc(m * sizeof(double));
-    for (int i = 0; i < m; ++i)
+    double *eigenvector_h = (double *)safe_malloc(safe_m * sizeof(double));
+    unsigned int seed = 1234 + row_coord;
+    for (int i = 0; i < safe_m; ++i)
     {
-        eigenvector_h[i] = get_normal_random();
+        eigenvector_h[i] = (double)rand_r(&seed) / RAND_MAX;
     }
-
-    CUDA_CHECK(cudaMemcpy(eigenvector_d, eigenvector_h, m * sizeof(double), cudaMemcpyHostToDevice));
+    if (m > 0)
+        CUDA_CHECK(cudaMemcpy(eigenvector_d, eigenvector_h, m * sizeof(double), cudaMemcpyHostToDevice));
     free(eigenvector_h);
 
     double sigma_max_sq = 1.0;
@@ -1052,14 +1131,13 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
     CUSPARSE_CHECK(cusparseCreateDnVec(&vecNextEigen, m, next_eigenvector_d, CUDA_R_64F));
     CUSPARSE_CHECK(cusparseCreateDnVec(&vecDual, n, dual_product_d, CUDA_R_64F));
 
-    void *dBufferAT = NULL;
-    void *dBufferA = NULL;
+    void *dBufferAT = NULL, *dBufferA = NULL;
     size_t bufferSizeAT = 0, bufferSizeA = 0;
     CUSPARSE_CHECK(cusparseSpMV_bufferSize(sparse_handle,
                                            CUSPARSE_OPERATION_NON_TRANSPOSE,
                                            &one,
                                            matAT,
-                                           vecNextEigen,
+                                           vecEigen,
                                            &zero,
                                            vecDual,
                                            CUDA_R_64F,
@@ -1071,33 +1149,39 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
                                            matA,
                                            vecDual,
                                            &zero,
-                                           vecEigen,
+                                           vecNextEigen,
                                            CUDA_R_64F,
                                            CUSPARSE_SPMV_CSR_ALG2,
                                            &bufferSizeA));
+    CUDA_CHECK(cudaMalloc(&dBufferAT, bufferSizeAT > 0 ? bufferSizeAT : 1));
+    CUDA_CHECK(cudaMalloc(&dBufferA, bufferSizeA > 0 ? bufferSizeA : 1));
 
-    CUDA_CHECK(cudaMalloc(&dBufferAT, bufferSizeAT));
-    CUDA_CHECK(cudaMalloc(&dBufferA, bufferSizeA));
+    double local_norm = 0.0;
+    if (m > 0)
+        CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, m, eigenvector_d, 1, &local_norm));
+
+    double norm_sq = local_norm * local_norm;
+    pdhcg_all_reduce_scalar(ctx, &norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+    norm_sq /= P_col;
+
+    double inv_norm = 1.0 / sqrt(norm_sq);
+    if (m > 0)
+        CUBLAS_CHECK(cublasDscal(blas_handle, m, &inv_norm, eigenvector_d, 1));
 
     for (int i = 0; i < max_iterations; ++i)
     {
-        CUDA_CHECK(cudaMemcpy(next_eigenvector_d, eigenvector_d, m * sizeof(double), cudaMemcpyDeviceToDevice));
-        double eigenvector_norm;
-        CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, m, next_eigenvector_d, 1, &eigenvector_norm));
-
-        double inv_eigenvector_norm = 1.0 / eigenvector_norm;
-        CUBLAS_CHECK(cublasDscal(blas_handle, m, &inv_eigenvector_norm, next_eigenvector_d, 1));
-
         CUSPARSE_CHECK(cusparseSpMV(sparse_handle,
                                     CUSPARSE_OPERATION_NON_TRANSPOSE,
                                     &one,
                                     matAT,
-                                    vecNextEigen,
+                                    vecEigen,
                                     &zero,
                                     vecDual,
                                     CUDA_R_64F,
                                     CUSPARSE_SPMV_CSR_ALG2,
                                     dBufferAT));
+
+        pdhcg_all_reduce_array(ctx, dual_product_d, n, PDHCG_OP_SUM, PDHCG_SCOPE_COL, 0);
 
         CUSPARSE_CHECK(cusparseSpMV(sparse_handle,
                                     CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -1105,22 +1189,56 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
                                     matA,
                                     vecDual,
                                     &zero,
-                                    vecEigen,
+                                    vecNextEigen,
                                     CUDA_R_64F,
                                     CUSPARSE_SPMV_CSR_ALG2,
                                     dBufferA));
 
-        CUBLAS_CHECK(cublasDdot(blas_handle, m, next_eigenvector_d, 1, eigenvector_d, 1, &sigma_max_sq));
+        pdhcg_all_reduce_array(ctx, next_eigenvector_d, m, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
+
+        double local_dot = 0.0;
+        if (m > 0)
+            CUBLAS_CHECK(cublasDdot(blas_handle, m, next_eigenvector_d, 1, eigenvector_d, 1, &local_dot));
+
+        pdhcg_all_reduce_scalar(ctx, &local_dot, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+        sigma_max_sq = local_dot / P_col;
 
         double neg_sigma_sq = -sigma_max_sq;
-        CUBLAS_CHECK(cublasDscal(blas_handle, m, &neg_sigma_sq, next_eigenvector_d, 1));
-        CUBLAS_CHECK(cublasDaxpy(blas_handle, m, &one, eigenvector_d, 1, next_eigenvector_d, 1));
+        if (m > 0)
+            CUBLAS_CHECK(cublasDaxpy(blas_handle, m, &neg_sigma_sq, eigenvector_d, 1, next_eigenvector_d, 1));
 
-        double residual_norm;
-        CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, m, next_eigenvector_d, 1, &residual_norm));
+        double local_res_norm = 0.0;
+        if (m > 0)
+            CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, m, next_eigenvector_d, 1, &local_res_norm));
 
-        if (residual_norm < tolerance)
+        double res_sq = local_res_norm * local_res_norm;
+        pdhcg_all_reduce_scalar(ctx, &res_sq, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+        res_sq /= P_col;
+
+        if (sqrt(res_sq) < tolerance)
             break;
+
+        if (m > 0)
+            CUBLAS_CHECK(cublasDaxpy(blas_handle, m, &sigma_max_sq, eigenvector_d, 1, next_eigenvector_d, 1));
+
+        local_norm = 0.0;
+        if (m > 0)
+            CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, m, next_eigenvector_d, 1, &local_norm));
+
+        norm_sq = local_norm * local_norm;
+        pdhcg_all_reduce_scalar(ctx, &norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+        norm_sq /= P_col;
+
+        inv_norm = 1.0 / sqrt(norm_sq);
+        if (m > 0)
+            CUBLAS_CHECK(cublasDscal(blas_handle, m, &inv_norm, next_eigenvector_d, 1));
+
+        double *tmp = eigenvector_d;
+        eigenvector_d = next_eigenvector_d;
+        next_eigenvector_d = tmp;
+
+        CUSPARSE_CHECK(cusparseDnVecSetValues(vecEigen, eigenvector_d));
+        CUSPARSE_CHECK(cusparseDnVecSetValues(vecNextEigen, next_eigenvector_d));
     }
 
     CUDA_CHECK(cudaFree(dBufferAT));
@@ -1141,7 +1259,8 @@ double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
                                    cublasHandle_t blas_handle,
                                    const cu_sparse_matrix_csr_t *A,
                                    int max_iterations,
-                                   double tolerance)
+                                   double tolerance,
+                                   struct grid_context_s *ctx)
 {
     int n = A->num_rows;
     double *v_d, *Av_d;
@@ -1195,6 +1314,11 @@ double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
     {
         double norm;
         CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, n, v_d, 1, &norm));
+
+        double norm_sq = norm * norm;
+        pdhcg_all_reduce_scalar(ctx, &norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+        norm = sqrt(norm_sq);
+
         double inv_norm = 1.0 / norm;
         CUBLAS_CHECK(cublasDscal(blas_handle, n, &inv_norm, v_d, 1));
 
@@ -1209,8 +1333,12 @@ double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
                                     CUSPARSE_SPMV_CSR_ALG2,
                                     dBuffer));
 
+        pdhcg_all_reduce_array(ctx, Av_d, n, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, 0);
+
         double old_lambda = lambda;
         CUBLAS_CHECK(cublasDdot(blas_handle, n, v_d, 1, Av_d, 1, &lambda));
+
+        pdhcg_all_reduce_scalar(ctx, &lambda, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
 
         if (i > 0 && fabs(lambda - old_lambda) < tolerance)
         {
@@ -1229,12 +1357,14 @@ double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
 
     return lambda;
 }
+
 double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
                                    cublasHandle_t blas_handle,
                                    const cu_sparse_matrix_csr_t *A,
                                    double lambda_max,
                                    int max_iterations,
-                                   double tolerance)
+                                   double tolerance,
+                                   struct grid_context_s *ctx)
 {
     int n = A->num_rows;
     double *v_d, *Av_d, *shifted_v_d;
@@ -1286,6 +1416,10 @@ double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
     {
         double norm;
         CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, n, v_d, 1, &norm));
+        double norm_sq = norm * norm;
+        pdhcg_all_reduce_scalar(ctx, &norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
+        norm = sqrt(norm_sq);
+
         double inv_norm = 1.0 / norm;
         CUBLAS_CHECK(cublasDscal(blas_handle, n, &inv_norm, v_d, 1));
 
@@ -1299,6 +1433,7 @@ double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
                                     CUDA_R_64F,
                                     CUSPARSE_SPMV_CSR_ALG2,
                                     dBuffer));
+        pdhcg_all_reduce_array(ctx, Av_d, n, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, 0);
 
         double neg_one = -1.0;
         CUDA_CHECK(cudaMemcpy(shifted_v_d, Av_d, n * sizeof(double), cudaMemcpyDeviceToDevice));
@@ -1307,6 +1442,7 @@ double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
 
         double old_mu = mu;
         CUBLAS_CHECK(cublasDdot(blas_handle, n, v_d, 1, shifted_v_d, 1, &mu));
+        pdhcg_all_reduce_scalar(ctx, &mu, PDHCG_OP_SUM, PDHCG_SCOPE_GLOBAL, false);
 
         if (i > 0 && fabs(mu - old_mu) < tolerance)
             break;

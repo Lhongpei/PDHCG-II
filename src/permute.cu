@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
+#include "pdhcg_types.h"
 #include "permute.h"
 #include "utils.h"
 #include <math.h>
@@ -278,4 +278,17 @@ void randomly_block_permute_problem(
 
     *out_row_perm = row_perm;
     *out_col_perm = col_perm;
+}
+
+void repermute_solution(pdhcg_result_t *result, int *row_perm, int *col_perm)
+{
+    int *inv_col_perm = (int *)malloc(result->num_variables * sizeof(int));
+    int *inv_row_perm = (int *)malloc(result->num_constraints * sizeof(int));
+    compute_inv_perm(result->num_variables, col_perm, inv_col_perm);
+    compute_inv_perm(result->num_constraints, row_perm, inv_row_perm);
+    permute_double_array(result->primal_solution, result->num_variables, inv_col_perm);
+    permute_double_array(result->dual_solution, result->num_constraints, inv_row_perm);
+    permute_double_array(result->reduced_cost, result->num_variables, inv_col_perm);
+    free(inv_col_perm);
+    free(inv_row_perm);
 }

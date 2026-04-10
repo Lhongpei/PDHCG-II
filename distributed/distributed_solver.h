@@ -1,5 +1,4 @@
 /*
-Copyright 2025 Haihao Lu
 Copyright 2026 Hongpei Li
 
 Licensed under the Apache License, Version 2.0 (the "License");

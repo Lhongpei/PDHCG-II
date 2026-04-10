@@ -26,17 +26,6 @@ limitations under the License.
 #include <stdlib.h>
 #include <string.h>
 
-#define NCCL_CHECK(cmd)                                                                                                \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        ncclResult_t r = cmd;                                                                                          \
-        if (r != ncclSuccess)                                                                                          \
-        {                                                                                                              \
-            printf("NCCL failure %s:%d '%s'\n", __FILE__, __LINE__, ncclGetErrorString(r));                            \
-            exit(EXIT_FAILURE);                                                                                        \
-        }                                                                                                              \
-    } while (0)
-
 extern "C"
 {
     ncclComm_t init_nccl(MPI_Comm mpi_comm)
@@ -63,6 +52,7 @@ extern "C"
     {
         grid_context_t grid;
         int initialized;
+        int world_size;
 
         MPI_Initialized(&initialized);
         if (!initialized)
@@ -72,6 +62,7 @@ extern "C"
 
         grid.comm_global = MPI_COMM_WORLD;
         MPI_Comm_rank(grid.comm_global, &grid.rank_global);
+        MPI_Comm_size(grid.comm_global, &world_size);
 
         grid.dims[0] = P_row;
         grid.dims[1] = P_col;
@@ -80,6 +71,59 @@ extern "C"
         CUDA_CHECK(cudaGetDeviceCount(&num_devices));
         int local_device_id = grid.rank_global % num_devices;
         CUDA_CHECK(cudaSetDevice(local_device_id));
+
+        char hostname[MPI_MAX_PROCESSOR_NAME];
+        int hostname_len;
+        MPI_Get_processor_name(hostname, &hostname_len);
+
+        int *all_device_ids = (int *)malloc(world_size * sizeof(int));
+        char *all_hostnames = (char *)malloc(world_size * MPI_MAX_PROCESSOR_NAME);
+
+        MPI_Allgather(&local_device_id, 1, MPI_INT, all_device_ids, 1, MPI_INT, grid.comm_global);
+        MPI_Allgather(hostname,
+                      MPI_MAX_PROCESSOR_NAME,
+                      MPI_CHAR,
+                      all_hostnames,
+                      MPI_MAX_PROCESSOR_NAME,
+                      MPI_CHAR,
+                      grid.comm_global);
+
+        if (grid.rank_global == 0)
+        {
+            int conflict_found = 0;
+            for (int i = 0; i < world_size; i++)
+            {
+                for (int j = i + 1; j < world_size; j++)
+                {
+                    char *host_i = &all_hostnames[i * MPI_MAX_PROCESSOR_NAME];
+                    char *host_j = &all_hostnames[j * MPI_MAX_PROCESSOR_NAME];
+
+                    if (strcmp(host_i, host_j) == 0 && all_device_ids[i] == all_device_ids[j])
+                    {
+                        fprintf(stderr,
+                                "\n[WARNING] GPU CONFLICT: Rank %d and Rank %d both bound to GPU %d on %s\n",
+                                i,
+                                j,
+                                all_device_ids[i],
+                                host_i);
+                        conflict_found = 1;
+                    }
+                }
+            }
+            if (conflict_found)
+            {
+                fprintf(stderr,
+                        "[WARNING] Multiple ranks sharing GPU will cause severe performance degradation \n"
+                        "          and potential OOM (like your current situation). \n"
+                        "[HINT]    Ensure: mpirun -n <num_procs_per_node> ≤ %d (GPUs per node)\n"
+                        "          Or use CUDA MPS: export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps\n",
+                        num_devices);
+            }
+        }
+
+        free(all_device_ids);
+        free(all_hostnames);
+        MPI_Barrier(grid.comm_global);
 
         int my_row = grid.rank_global / P_col;
         int my_col = grid.rank_global % P_col;
@@ -91,7 +135,7 @@ extern "C"
         MPI_Comm_split(grid.comm_global, my_col, grid.rank_global, &grid.comm_col);
         grid.nccl_row = init_nccl(grid.comm_row);
         grid.nccl_col = init_nccl(grid.comm_col);
-
+        grid.nccl_global = init_nccl(grid.comm_global);
         return grid;
     }
 }
@@ -307,12 +351,11 @@ rescale_info_t *partition_rescale_info(rescale_info_t *global_info,
     rescale_info_t *loc_info = (rescale_info_t *)calloc(1, sizeof(rescale_info_t));
 
     int n_start, m_start;
-    loc_info->scaled_problem = partition_qp_problem(global_info->scaled_problem, grid, method, &n_start, &m_start);
 
+    loc_info->scaled_problem = partition_qp_problem(global_info->scaled_problem, grid, method, &n_start, &m_start);
     qp_problem_t *loc_lp = loc_info->scaled_problem;
 
     loc_info->var_rescale = copy_slice(global_info->var_rescale, n_start, loc_lp->num_variables);
-
     loc_info->con_rescale = copy_slice(global_info->con_rescale, m_start, loc_lp->num_constraints);
 
     if (out_n_start)
@@ -323,6 +366,42 @@ rescale_info_t *partition_rescale_info(rescale_info_t *global_info,
     loc_info->con_bound_rescale = global_info->con_bound_rescale;
     loc_info->obj_vec_rescale = global_info->obj_vec_rescale;
     loc_info->rescaling_time_sec = global_info->rescaling_time_sec;
+
+    processed_qp_problem_t *global_processed = global_info->processed_problem;
+    processed_qp_problem_t *loc_processed = (processed_qp_problem_t *)safe_calloc(1, sizeof(processed_qp_problem_t));
+
+    loc_processed->num_variables = loc_lp->num_variables;
+    loc_processed->num_constraints = loc_lp->num_constraints;
+    loc_processed->num_rank_lowrank_obj = loc_lp->num_rank_lowrank_obj;
+    loc_processed->objective_constant = loc_lp->objective_constant;
+
+    loc_processed->constraint_matrix_num_nonzeros = loc_lp->constraint_matrix_num_nonzeros;
+    loc_processed->objective_sparse_matrix_num_nonzeros = loc_lp->objective_sparse_matrix_num_nonzeros;
+    loc_processed->objective_lowrank_matrix_num_nonzeros = loc_lp->objective_lowrank_matrix_num_nonzeros;
+
+    loc_processed->variable_lower_bound = loc_lp->variable_lower_bound;
+    loc_processed->variable_upper_bound = loc_lp->variable_upper_bound;
+    loc_processed->objective_vector = loc_lp->objective_vector;
+    loc_processed->constraint_lower_bound = loc_lp->constraint_lower_bound;
+    loc_processed->constraint_upper_bound = loc_lp->constraint_upper_bound;
+    loc_processed->primal_start = loc_lp->primal_start;
+    loc_processed->dual_start = loc_lp->dual_start;
+    loc_processed->constraint_matrix = loc_lp->constraint_matrix;
+    loc_processed->objective_sparse_matrix = loc_lp->objective_sparse_matrix;
+    loc_processed->objective_lowrank_matrix = loc_lp->objective_lowrank_matrix;
+    loc_processed->quad_type = global_processed->quad_type;
+
+    if (global_processed->quad_type == PDHCG_DIAG_Q && global_processed->diagonal_quad_objective != NULL)
+    {
+        loc_processed->diagonal_quad_objective =
+            copy_slice(global_processed->diagonal_quad_objective, n_start, loc_lp->num_variables);
+    }
+    else
+    {
+        loc_processed->diagonal_quad_objective = NULL;
+    }
+
+    loc_info->processed_problem = loc_processed;
 
     return loc_info;
 }
@@ -339,11 +418,15 @@ size_t get_qp_problem_size(const qp_problem_t *qp)
     size += sizeof(double) * qp->num_constraints * 2;
 
 #define ADD_CSR_SIZE(csr, num_rows, nnz)                                                                               \
-    if (csr)                                                                                                           \
     {                                                                                                                  \
-        size += sizeof(int) * (num_rows + 1);                                                                          \
-        size += sizeof(int) * nnz;                                                                                     \
-        size += sizeof(double) * nnz;                                                                                  \
+        size += sizeof(int);                                                                                           \
+        if (csr)                                                                                                       \
+        {                                                                                                              \
+            int safe_nnz = (nnz) > 0 ? (nnz) : 1;                                                                      \
+            size += sizeof(int) * ((num_rows) + 1);                                                                    \
+            size += sizeof(int) * safe_nnz;                                                                            \
+            size += sizeof(double) * safe_nnz;                                                                         \
+        }                                                                                                              \
     }
 
     ADD_CSR_SIZE(qp->constraint_matrix, qp->num_constraints, qp->constraint_matrix_num_nonzeros);
@@ -429,7 +512,7 @@ void serialize_qp_problem_to_ptr(const qp_problem_t *qp, char **ptr_ref)
         }                                                                                                              \
     }
 
-qp_problem_t *deserialize_lp_problem_from_ptr(const char **ptr_ref)
+qp_problem_t *deserialize_qp_problem_from_ptr(const char **ptr_ref)
 {
     const char *ptr = *ptr_ref;
     qp_problem_t *qp = (qp_problem_t *)calloc(1, sizeof(qp_problem_t));
@@ -516,7 +599,7 @@ rescale_info_t *deserialize_rescale_info(const char *buffer)
     D_VAL(info->obj_vec_rescale, double);
     D_VAL(info->rescaling_time_sec, double);
 
-    info->scaled_problem = deserialize_lp_problem_from_ptr(&ptr);
+    info->scaled_problem = deserialize_qp_problem_from_ptr(&ptr);
 
     int n = info->scaled_problem->num_variables;
     int m = info->scaled_problem->num_constraints;
@@ -655,7 +738,7 @@ void distribute_data_bcast_then_partition(const qp_problem_t *working_problem,
         if (grid_context->rank_global != 0)
         {
             const char *ptr_tmp = buf;
-            current_working_problem = deserialize_lp_problem_from_ptr(&ptr_tmp);
+            current_working_problem = deserialize_qp_problem_from_ptr(&ptr_tmp);
         }
         if (buf)
             free(buf);
@@ -675,6 +758,7 @@ void distribute_data_bcast_then_partition(const qp_problem_t *working_problem,
         if (grid_context->rank_global != 0)
         {
             current_rescale_info = deserialize_rescale_info(buf);
+            current_rescale_info->processed_problem = preprocess_qp_problem(current_rescale_info->scaled_problem);
         }
         if (buf)
             free(buf);
@@ -786,7 +870,7 @@ void distribute_data_partition_then_send(const qp_problem_t *working_problem,
         size_t sz_lp = 0;
         big_recv_bytes((void **)&buf_lp, &sz_lp, 0, grid_context->comm_global);
         const char *ptr_lp = buf_lp;
-        *out_local_lp = deserialize_lp_problem_from_ptr(&ptr_lp);
+        *out_local_lp = deserialize_qp_problem_from_ptr(&ptr_lp);
         free(buf_lp);
 
         char *buf_resc = NULL;
@@ -1106,7 +1190,7 @@ void gather_distributed_vector(
 
 void print_distributed_params(const pdhg_parameters_t *params)
 {
-    if (!params->verbose)
+    if (params->verbose < 2)
         return;
     printf("------------------------------ Distributed Configuration "
            "------------------------------\n");

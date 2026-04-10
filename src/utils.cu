@@ -336,6 +336,10 @@ void set_default_parameters(pdhg_parameters_t *params)
     params->inner_solver_parameters.iteration_limit = 1000;
     params->inner_solver_parameters.initial_tolerance = 1e-3;
     params->inner_solver_parameters.min_tolerance = 1e-9;
+
+    params->grid_size.decided = false;
+    params->partition_method = UNIFORM_PARTITION;
+    params->permute_method = BLOCK_RANDOM_PERMUTATION;
 }
 
 #define PRINT_DIFF_INT(name, current, default_val)                                                                     \

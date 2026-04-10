@@ -52,20 +52,23 @@ extern "C"
                                            const cu_sparse_matrix_csr_t *A,
                                            const cu_sparse_matrix_csr_t *AT,
                                            int max_iterations,
-                                           double tolerance);
+                                           double tolerance,
+                                           struct grid_context_s *ctx);
 
     double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
                                        cublasHandle_t blas_handle,
                                        const cu_sparse_matrix_csr_t *A,
                                        int max_iterations,
-                                       double tolerance);
+                                       double tolerance,
+                                       struct grid_context_s *ctx);
 
     double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
                                        cublasHandle_t blas_handle,
                                        const cu_sparse_matrix_csr_t *A,
                                        double lambda_max,
                                        int max_iterations,
-                                       double tolerance);
+                                       double tolerance,
+                                       struct grid_context_s *ctx);
 
 #ifdef __cplusplus
 }

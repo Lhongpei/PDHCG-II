@@ -25,14 +25,16 @@ limitations under the License.
 extern "C"
 {
 #endif
-
-    /**
- * @brief Initializes the MPI and NCCL contexts for a 2D processor grid.
- * * @param P_row Number of processor rows
- * @param P_col Number of processor columns
- * @return GridContext The initialized context structure
- */
-
+#define NCCL_CHECK(cmd)                                                                                                \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        ncclResult_t r = cmd;                                                                                          \
+        if (r != ncclSuccess)                                                                                          \
+        {                                                                                                              \
+            printf("NCCL failure %s:%d '%s'\n", __FILE__, __LINE__, ncclGetErrorString(r));                            \
+            exit(EXIT_FAILURE);                                                                                        \
+        }                                                                                                              \
+    } while (0)
     grid_context_t initialize_parallel_context(int P_row, int P_col);
     rescale_info_t *partition_rescale_info(rescale_info_t *global_info,
                                            const grid_context_t *grid,
@@ -48,7 +50,7 @@ extern "C"
     rescale_info_t *deserialize_rescale_info(const char *buffer);
     void serialize_rescale_info(const rescale_info_t *info, char *buffer);
     size_t get_rescale_info_size(const rescale_info_t *info);
-    qp_problem_t *deserialize_lp_problem_from_ptr(const char **ptr_ref);
+    qp_problem_t *deserialize_qp_problem_from_ptr(const char **ptr_ref);
     void serialize_qp_problem_to_ptr(const qp_problem_t *qp, char **ptr_ref);
     size_t get_qp_problem_size(const qp_problem_t *qp);
     void big_bcast_bytes(void **buffer_ptr, size_t *size_ptr, int root, MPI_Comm comm);

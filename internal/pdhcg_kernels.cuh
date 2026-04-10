@@ -291,6 +291,17 @@ extern "C"
                                                         const double *variable_upper_bound_finite_val,
                                                         int num_variables);
 
+    __global__ void compute_and_rescale_reduced_cost_qp_kernel(double *__restrict__ reduced_cost,
+                                                               const double *__restrict__ objective,
+                                                               const double *__restrict__ quadratic_product,
+                                                               const double *__restrict__ dual_product,
+                                                               const double *__restrict__ variable_rescaling,
+                                                               const double objective_vector_rescaling,
+                                                               const double constraint_bound_rescaling,
+                                                               const double *__restrict__ variable_lower_bound,
+                                                               const double *__restrict__ variable_upper_bound,
+                                                               int n_vars);
+
 #ifdef __cplusplus
 }
 #endif

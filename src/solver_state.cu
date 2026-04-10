@@ -30,7 +30,11 @@ limitations under the License.
 #include <stdio.h>
 #include <time.h>
 
-static int get_global_n(pdhg_solver_state_t *state)
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+#include "distributed_types.h"
+#endif
+
+int get_global_n(pdhg_solver_state_t *state)
 {
     int n = state->num_variables;
 #ifdef PDHCG_COMPILE_DISTRIBUTED
@@ -417,14 +421,16 @@ void initialize_quadratic_term_information(pdhg_solver_state_t *state, const pdh
                                         state->blas_handle,
                                         state->quadratic_objective_term->objective_sparse_matrix,
                                         params->sv_max_iter,
-                                        params->sv_tol);
+                                        params->sv_tol,
+                                        state->grid_context);
         state->quadratic_objective_term->nonconvexity =
             estimate_minimum_eigenvalue(state->sparse_handle,
                                         state->blas_handle,
                                         state->quadratic_objective_term->objective_sparse_matrix,
                                         state->quadratic_objective_term->norm,
                                         params->sv_max_iter,
-                                        params->sv_tol);
+                                        params->sv_tol,
+                                        state->grid_context);
         return;
     }
     if (state->quadratic_objective_term->quad_obj_type == PDHCG_DIAG_Q)

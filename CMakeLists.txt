@@ -51,7 +51,7 @@ include(CMakeDependentOption)
 option(PDHCG_BUILD_STATIC_LIB "Build the PDHCG static library" ON)
 option(PDHCG_BUILD_SHARED_LIB "Build the PDHCG shared library" ON)
 option(PDHCG_COMPILE_PSQP "Download and use PSQP for presolving" OFF)
-option(PDHCG_COMPILE_DISTRIBUTED "Enable distributed computing with MPI" OFF)
+option(PDHCG_COMPILE_DISTRIBUTED "Enable distributed computing with MPI" ON)
 
 # format: cmake_dependent_option(OPTION "docstring" DEFAULT_VALUE "DEPENDENCY_VARIABLE" FORCE_OFF_VALUE)
 cmake_dependent_option(PDHCG_BUILD_PYTHON "Build the PDHCG Python bindings" OFF
@@ -136,12 +136,17 @@ set(CORE_INCLUDE_DIRS
 )
 
 if(PDHCG_COMPILE_DISTRIBUTED)
+    add_definitions(-DPDHCG_COMPILE_DISTRIBUTED)
     file(GLOB DIST_C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/distributed/*.c")
     file(GLOB DIST_CU_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/distributed/*.cu")
+    list(REMOVE_ITEM DIST_C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/distributed/distributed_ops_stub.c")
 
     list(APPEND C_SOURCES ${DIST_C_SOURCES})
     list(APPEND CU_SOURCES ${DIST_CU_SOURCES})
 
+    list(APPEND CORE_INCLUDE_DIRS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/distributed)
+else()
+    list(APPEND C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/distributed/distributed_ops_stub.c")
     list(APPEND CORE_INCLUDE_DIRS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/distributed)
 endif()
 
@@ -244,6 +249,11 @@ if(PDHCG_BUILD_CLI)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/internal
     )
+
+    if(PDHCG_COMPILE_DISTRIBUTED)
+        target_include_directories(PDHCG_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/distributed)
+        target_compile_definitions(PDHCG_cli PRIVATE PDHCG_COMPILE_DISTRIBUTED)
+    endif()
 
     # Link CLI to the static core library
     target_link_libraries(PDHCG_cli PRIVATE pdhcg_core)
