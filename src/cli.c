@@ -181,6 +181,7 @@ void print_usage(const char *prog_name)
 
 int run_pdhcg(int argc, char *argv[])
 {
+    cudaFree(0);
     pdhg_parameters_t params;
     set_default_parameters(&params);
 
@@ -621,8 +622,6 @@ int is_running_under_mpi()
 
 int main(int argc, char *argv[])
 {
-    cudaFree(0);
-
 #ifdef PDHCG_COMPILE_DISTRIBUTED
     if (is_running_under_mpi())
     {
