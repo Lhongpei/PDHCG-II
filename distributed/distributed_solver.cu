@@ -174,17 +174,31 @@ pdhcg_result_t *create_result_from_state_distributed(pdhg_solver_state_t *state,
 
     update_obj_product(state, state->pdhg_primal_solution);
 
-    compute_and_rescale_reduced_cost_qp_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
-        state->dual_slack,
-        state->objective_vector,
-        state->quadratic_objective_term->primal_obj_product,
-        state->dual_product,
-        state->variable_rescaling,
-        state->objective_vector_rescaling,
-        state->constraint_bound_rescaling,
-        state->variable_lower_bound,
-        state->variable_upper_bound,
-        state->num_variables);
+    if (state->problem_type == LP)
+    {
+        compute_and_rescale_reduced_cost_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
+            state->dual_slack,
+            state->objective_vector,
+            state->dual_product,
+            state->variable_rescaling,
+            state->objective_vector_rescaling,
+            state->constraint_bound_rescaling,
+            state->num_variables);
+    }
+    else
+    {
+        compute_and_rescale_reduced_cost_qp_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
+            state->dual_slack,
+            state->objective_vector,
+            state->quadratic_objective_term->primal_obj_product,
+            state->dual_product,
+            state->variable_rescaling,
+            state->objective_vector_rescaling,
+            state->constraint_bound_rescaling,
+            state->variable_lower_bound,
+            state->variable_upper_bound,
+            state->num_variables);
+    }
 
     rescale_solution(state);
 

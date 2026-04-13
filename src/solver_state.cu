@@ -267,7 +267,7 @@ static void initialize_lowrank_component_obj(pdhg_solver_state_t *state, const p
 
 static void initialize_quadratic_obj_term(pdhg_solver_state_t *state, const processed_qp_problem_t *problem)
 {
-    state->quadratic_objective_term = (quadratic_objective_term_t *)safe_malloc(sizeof(quadratic_objective_term_t));
+    state->quadratic_objective_term = (quadratic_objective_term_t *)safe_calloc(1, sizeof(quadratic_objective_term_t));
     state->quadratic_objective_term->quad_obj_type = problem->quad_type;
 
     if (state->quadratic_objective_term->quad_obj_type == PDHCG_NON_Q)
