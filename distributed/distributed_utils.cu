@@ -772,9 +772,9 @@ void distribute_data_bcast_then_partition(const qp_problem_t *working_problem,
     *out_local_qp = partition_qp_problem(current_working_problem, grid_context, params->partition_method, NULL, NULL);
     grid_context->n_start = real_n_start;
 
-    rescale_info_free(current_rescale_info);
     if (grid_context->rank_global != 0)
     {
+        rescale_info_free(current_rescale_info);
         qp_problem_free((qp_problem_t *)current_working_problem);
     }
 
@@ -1239,5 +1239,5 @@ void print_distributed_params(const pdhg_parameters_t *params)
     }
 
     printf("---------------------------------------------------------------------"
-           "------------------\n\n");
+           "------------------\n");
 }

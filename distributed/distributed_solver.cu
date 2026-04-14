@@ -272,65 +272,17 @@ pdhcg_result_t *create_result_from_state_distributed(pdhg_solver_state_t *state,
 }
 
 static pdhcg_result_t *distributed_optimize_core(const pdhg_parameters_t *params,
-                                                 const qp_problem_t *original_problem,
+                                                 const qp_problem_t *working_problem,
                                                  grid_context_t *grid_context)
 {
-
-    print_initial_info(params, original_problem);
-    print_distributed_params(params);
-
-    pdhcg_presolve_info_t *presolve_info = NULL;
-    const qp_problem_t *working_problem = original_problem;
-    bool working_problem_needs_free = false;
-    int is_solved_during_presolve = 0;
-
     if (grid_context->rank_global == 0)
     {
-        if (params->presolve && pdhcg_presolve_available())
-        {
-            presolve_info = pdhcg_presolve(original_problem, params);
-            if (presolve_info)
-            {
-                if (presolve_info->problem_solved_during_presolve)
-                {
-                    is_solved_during_presolve = 1;
-                }
-                else if (presolve_info->reduced_problem)
-                {
-                    working_problem = presolve_info->reduced_problem;
-                }
-            }
-        }
-
-        if (!is_solved_during_presolve)
-        {
-            if (working_problem->num_constraints == 0 || working_problem->constraint_matrix == NULL)
-            {
-                working_problem = create_problem_with_dummy_constraint(original_problem);
-                working_problem_needs_free = true;
-            }
-        }
-    }
-
-    MPI_Bcast(&is_solved_during_presolve, 1, MPI_INT, 0, grid_context->comm_global);
-
-    if (is_solved_during_presolve)
-    {
-        if (grid_context->rank_global == 0)
-        {
-            pdhcg_result_t *result = pdhcg_create_result_from_presolve(presolve_info, original_problem);
-            if (result)
-                pdhg_final_log(result, params);
-            pdhcg_presolve_info_free(presolve_info);
-            return result;
-        }
-        else
-        {
-            return NULL;
-        }
+        print_initial_info(params, working_problem);
+        print_distributed_params(params);
     }
 
     rescale_info_t *rescale_info = NULL;
+
     if (grid_context->rank_global == 0)
     {
         rescale_info = rescale_problem(params, working_problem);
@@ -359,6 +311,7 @@ static pdhcg_result_t *distributed_optimize_core(const pdhg_parameters_t *params
 
     compute_residual(state, params->optimality_norm);
     MPI_Barrier(grid_context->comm_global);
+
     double start_time = MPI_Wtime();
     bool do_restart = false;
 
@@ -367,7 +320,6 @@ static pdhcg_result_t *distributed_optimize_core(const pdhg_parameters_t *params
         if ((state->is_this_major_iteration || state->total_count == 0) ||
             (state->total_count % get_print_frequency(state->total_count) == 0))
         {
-
             compute_residual(state, params->optimality_norm);
 
             if (state->is_this_major_iteration && state->total_count < 3 * params->termination_evaluation_frequency)
@@ -422,22 +374,12 @@ static pdhcg_result_t *distributed_optimize_core(const pdhg_parameters_t *params
             display_iteration_stats(state, params->verbose);
     }
 
-    pdhcg_result_t *result = create_result_from_state_distributed(state, original_problem);
+    pdhcg_result_t *result = create_result_from_state_distributed(state, working_problem);
 
     if (grid_context->rank_global == 0)
     {
-        if (presolve_info && presolve_info->reduced_problem)
-        {
-            pdhcg_postsolve(presolve_info, result, original_problem);
-        }
-
-        if (working_problem_needs_free)
-        {
-            qp_problem_free((qp_problem_t *)working_problem);
-        }
-
-        pdhg_final_log(result, params);
-        pdhcg_presolve_info_free(presolve_info);
+        if (rescale_info)
+            rescale_info_free(rescale_info);
     }
 
     pdhg_solver_state_free(state);
@@ -458,36 +400,100 @@ pdhcg_result_t *distributed_optimize(const pdhg_parameters_t *params, const qp_p
 
     pdhcg_result_t *result = NULL;
 
-    if (params->permute_method != NO_PERMUTATION)
+    const qp_problem_t *working_problem = original_problem;
+    pdhcg_presolve_info_t *presolve_info = NULL;
+    qp_problem_t *dummy_problem = NULL;
+    qp_problem_t *permuted_problem = NULL;
+    int *row_perm = NULL;
+    int *col_perm = NULL;
+    int is_solved_early = 0;
+
+    if (grid_context.rank_global == 0)
     {
-        qp_problem_t *permuted_problem = NULL;
-        int *row_perm = NULL;
-        int *col_perm = NULL;
-
-        if (grid_context.rank_global == 0)
+        if (params->presolve && pdhcg_presolve_available())
         {
-            row_perm = (int *)malloc(original_problem->num_constraints * sizeof(int));
-            col_perm = (int *)malloc(original_problem->num_variables * sizeof(int));
-
-            generate_random_permutation(original_problem->num_constraints, row_perm);
-            generate_random_permutation(original_problem->num_variables, col_perm);
-
-            permuted_problem = permute_problem_return_new(original_problem, row_perm, col_perm);
+            presolve_info = pdhcg_presolve(original_problem, params);
+            if (presolve_info)
+            {
+                if (presolve_info->problem_solved_during_presolve)
+                {
+                    is_solved_early = 1;
+                }
+                else if (presolve_info->reduced_problem)
+                {
+                    working_problem = presolve_info->reduced_problem;
+                }
+            }
         }
 
-        result = distributed_optimize_core(&sub_params, permuted_problem, &grid_context);
-
-        if (grid_context.rank_global == 0)
+        if (!is_solved_early)
         {
-            repermute_solution(result, row_perm, col_perm);
+            if (working_problem->num_constraints == 0 || working_problem->constraint_matrix == NULL)
+            {
+                dummy_problem = create_problem_with_dummy_constraint(working_problem);
+                working_problem = dummy_problem;
+            }
+        }
 
-            free(row_perm);
-            free(col_perm);
+        if (!is_solved_early && params->permute_method != NO_PERMUTATION)
+        {
+            row_perm = (int *)malloc(working_problem->num_constraints * sizeof(int));
+            col_perm = (int *)malloc(working_problem->num_variables * sizeof(int));
+
+            generate_random_permutation(working_problem->num_constraints, row_perm);
+            generate_random_permutation(working_problem->num_variables, col_perm);
+
+            permuted_problem = permute_problem_return_new(working_problem, row_perm, col_perm);
+            working_problem = permuted_problem;
         }
     }
-    else
+
+    MPI_Bcast(&is_solved_early, 1, MPI_INT, 0, grid_context.comm_global);
+
+    if (is_solved_early)
     {
-        result = distributed_optimize_core(&sub_params, original_problem, &grid_context);
+        if (grid_context.rank_global == 0)
+        {
+            result = pdhcg_create_result_from_presolve(presolve_info, original_problem);
+            if (result)
+                pdhg_final_log(result, params);
+            if (presolve_info)
+                pdhcg_presolve_info_free(presolve_info);
+            return result;
+        }
+        return NULL;
+    }
+
+    result = distributed_optimize_core(&sub_params, working_problem, &grid_context);
+
+    if (grid_context.rank_global == 0 && result != NULL)
+    {
+        if (params->permute_method != NO_PERMUTATION)
+        {
+            repermute_solution(result, row_perm, col_perm);
+            free(row_perm);
+            free(col_perm);
+            if (permuted_problem)
+                qp_problem_free(permuted_problem);
+        }
+
+        if (presolve_info && presolve_info->reduced_problem)
+        {
+            pdhcg_postsolve(presolve_info, result, original_problem);
+        }
+
+        if (dummy_problem)
+        {
+            qp_problem_free(dummy_problem);
+        }
+
+        pdhg_final_log(result, params);
+        if (presolve_info)
+            pdhcg_presolve_info_free(presolve_info);
+    }
+    else if (grid_context.rank_global != 0)
+    {
+        result = NULL;
     }
 
     return result;
