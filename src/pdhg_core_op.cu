@@ -23,6 +23,7 @@ limitations under the License.
 #include "preconditioner.h"
 #include "solver.h"
 #include "solver_state.h"
+#include "spmv_backend.h"
 #include "utils.h"
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
@@ -42,20 +43,15 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
     {
         case PDHCG_NON_Q:
             return;
+
         case PDHCG_SPARSE_Q:
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, primal_solution));
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->quadratic_objective_term->vec_global_primal_obj_prod,
-                                                  state->quadratic_objective_term->global_primal_obj_product));
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matQ,
-                                        state->vec_primal_sol,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_global_primal_obj_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->primal_obj_spmv_buffer));
+            pdhcg_spmv_execute(state->sparse_handle,
+                               state->quadratic_objective_term->spmv_ctx_Q,
+                               &HOST_ONE,
+                               &HOST_ZERO,
+                               primal_solution,
+                               state->quadratic_objective_term->global_primal_obj_product);
+
             pdhcg_all_reduce_array(state->grid_context,
                                    state->quadratic_objective_term->global_primal_obj_product,
                                    get_global_n(state),
@@ -63,6 +59,7 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
                                    PDHCG_SCOPE_ROW,
                                    0);
             return;
+
         case PDHCG_DIAG_Q:
             element_wise_mul_kernel<<<state->num_blocks_primal, THREADS_PER_BLOCK>>>(
                 state->quadratic_objective_term->diagonal_objective_matrix,
@@ -70,18 +67,14 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
                 state->quadratic_objective_term->primal_obj_product,
                 state->num_variables);
             return;
+
         case PDHCG_LOW_RANK_Q:
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, primal_solution));
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matR,
-                                        state->vec_primal_sol,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_Rx_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->Rx_spmv_buffer));
+            pdhcg_spmv_execute(state->sparse_handle,
+                               state->quadratic_objective_term->spmv_ctx_R,
+                               &HOST_ONE,
+                               &HOST_ZERO,
+                               primal_solution,
+                               state->quadratic_objective_term->Rx_product);
 
             pdhcg_all_reduce_array(state->grid_context,
                                    state->quadratic_objective_term->Rx_product,
@@ -90,30 +83,21 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
                                    PDHCG_SCOPE_ROW,
                                    0);
 
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matRt,
-                                        state->quadratic_objective_term->vec_Rx_prod,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_primal_obj_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->RRx_spmv_buffer));
+            pdhcg_spmv_execute(state->sparse_handle,
+                               state->quadratic_objective_term->spmv_ctx_Rt,
+                               &HOST_ONE,
+                               &HOST_ZERO,
+                               state->quadratic_objective_term->Rx_product,
+                               state->quadratic_objective_term->primal_obj_product);
             return;
-        case PDHCG_LOW_RANK_PLUS_SPARSE_Q:
-            CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, primal_solution));
 
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matQ,
-                                        state->vec_primal_sol,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_global_primal_obj_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->primal_obj_spmv_buffer));
+        case PDHCG_LOW_RANK_PLUS_SPARSE_Q:
+            pdhcg_spmv_execute(state->sparse_handle,
+                               state->quadratic_objective_term->spmv_ctx_Q,
+                               &HOST_ONE,
+                               &HOST_ZERO,
+                               primal_solution,
+                               state->quadratic_objective_term->global_primal_obj_product);
 
             pdhcg_all_reduce_array(state->grid_context,
                                    state->quadratic_objective_term->global_primal_obj_product,
@@ -122,16 +106,12 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
                                    PDHCG_SCOPE_ROW,
                                    0);
 
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matR,
-                                        state->vec_primal_sol,
-                                        &HOST_ZERO,
-                                        state->quadratic_objective_term->vec_Rx_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->Rx_spmv_buffer));
+            pdhcg_spmv_execute(state->sparse_handle,
+                               state->quadratic_objective_term->spmv_ctx_R,
+                               &HOST_ONE,
+                               &HOST_ZERO,
+                               primal_solution,
+                               state->quadratic_objective_term->Rx_product);
 
             pdhcg_all_reduce_array(state->grid_context,
                                    state->quadratic_objective_term->Rx_product,
@@ -140,16 +120,12 @@ void update_obj_product(pdhg_solver_state_t *state, double *primal_solution)
                                    PDHCG_SCOPE_ROW,
                                    0);
 
-            CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                        CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->matRt,
-                                        state->quadratic_objective_term->vec_Rx_prod,
-                                        &HOST_ONE,
-                                        state->quadratic_objective_term->vec_primal_obj_prod,
-                                        CUDA_R_64F,
-                                        CUSPARSE_SPMV_CSR_ALG2,
-                                        state->quadratic_objective_term->RRx_spmv_buffer));
+            pdhcg_spmv_execute(state->sparse_handle,
+                               state->quadratic_objective_term->spmv_ctx_Rt,
+                               &HOST_ONE,
+                               &HOST_ONE,
+                               state->quadratic_objective_term->Rx_product,
+                               state->quadratic_objective_term->primal_obj_product);
             return;
 
         default:
@@ -372,20 +348,12 @@ void pdhg_update(pdhg_solver_state_t *state)
     }
     double dual_step_size = state->step_size * state->primal_weight;
 
-    // Primal Update
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol, state->current_dual_solution));
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product));
-
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matAt,
-                                state->vec_dual_sol,
-                                &HOST_ZERO,
-                                state->vec_dual_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->dual_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_At,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->current_dual_solution,
+                       state->dual_product);
 
     pdhcg_all_reduce_array(
         state->grid_context, state->dual_product, state->num_variables, PDHCG_OP_SUM, PDHCG_SCOPE_COL, 0);
@@ -415,20 +383,12 @@ void pdhg_update(pdhg_solver_state_t *state)
     }
     state->inner_solver->total_count++;
 
-    // Dual Update
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, state->reflected_primal_solution));
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_prod, state->primal_product));
-
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matA,
-                                state->vec_primal_sol,
-                                &HOST_ZERO,
-                                state->vec_primal_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->primal_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_A,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->reflected_primal_solution,
+                       state->primal_product);
 
     pdhcg_all_reduce_array(
         state->grid_context, state->primal_product, state->num_constraints, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
@@ -607,19 +567,12 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
         state->num_variables,
         state->num_constraints);
 
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol, state->delta_dual_solution));
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product));
-
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matAt,
-                                state->vec_dual_sol,
-                                &HOST_ZERO,
-                                state->vec_dual_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->dual_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_At,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->delta_dual_solution,
+                       state->dual_product);
 
     pdhcg_all_reduce_array(
         state->grid_context, state->dual_product, state->num_variables, PDHCG_OP_SUM, PDHCG_SCOPE_COL, 0);
@@ -670,35 +623,22 @@ void compute_fixed_point_error(pdhg_solver_state_t *state)
 
 void compute_residual(pdhg_solver_state_t *state, norm_type_t optimality_norm)
 {
-    cusparseDnVecSetValues(state->vec_primal_sol, state->pdhg_primal_solution);
-    cusparseDnVecSetValues(state->vec_dual_sol, state->pdhg_dual_solution);
-    cusparseDnVecSetValues(state->vec_primal_prod, state->primal_product);
-    cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product);
-
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matA,
-                                state->vec_primal_sol,
-                                &HOST_ZERO,
-                                state->vec_primal_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->primal_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_A,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->pdhg_primal_solution,
+                       state->primal_product);
 
     pdhcg_all_reduce_array(
         state->grid_context, state->primal_product, state->num_constraints, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
 
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matAt,
-                                state->vec_dual_sol,
-                                &HOST_ZERO,
-                                state->vec_dual_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->dual_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_At,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->pdhg_dual_solution,
+                       state->dual_product);
 
     pdhcg_all_reduce_array(
         state->grid_context, state->dual_product, state->num_variables, PDHCG_OP_SUM, PDHCG_SCOPE_COL, 0);
@@ -906,35 +846,22 @@ void compute_infeasibility_information(pdhg_solver_state_t *state)
 
     pdhcg_all_reduce_scalar(state->grid_context, &dual_ray_inf_norm, PDHCG_OP_MAX, PDHCG_SCOPE_COL, false);
 
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_sol, state->delta_primal_solution));
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol, state->delta_dual_solution));
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_primal_prod, state->primal_product));
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product));
-
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matA,
-                                state->vec_primal_sol,
-                                &HOST_ZERO,
-                                state->vec_primal_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->primal_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_A,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->delta_primal_solution,
+                       state->primal_product);
 
     pdhcg_all_reduce_array(
         state->grid_context, state->primal_product, state->num_constraints, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
 
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matAt,
-                                state->vec_dual_sol,
-                                &HOST_ZERO,
-                                state->vec_dual_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->dual_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_At,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->delta_dual_solution,
+                       state->dual_product);
 
     pdhcg_all_reduce_array(
         state->grid_context, state->dual_product, state->num_variables, PDHCG_OP_SUM, PDHCG_SCOPE_COL, 0);
@@ -1032,19 +959,12 @@ pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const qp_pr
 {
     pdhcg_result_t *results = (pdhcg_result_t *)safe_calloc(1, sizeof(pdhcg_result_t));
 
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol, state->pdhg_dual_solution));
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product));
-
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matAt,
-                                state->vec_dual_sol,
-                                &HOST_ZERO,
-                                state->vec_dual_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->dual_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_At,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->pdhg_dual_solution,
+                       state->dual_product);
 
     update_obj_product(state, state->pdhg_primal_solution);
 
@@ -1102,6 +1022,181 @@ pdhcg_result_t *create_result_from_state(pdhg_solver_state_t *state, const qp_pr
     return results;
 }
 
+double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
+                                   cublasHandle_t blas_handle,
+                                   const cu_sparse_matrix_csr_t *A,
+                                   int max_iterations,
+                                   double tolerance,
+                                   struct grid_context_s *ctx)
+{
+    int n_global = A->num_rows;
+    int n_local = A->num_cols;
+    int n_start = get_n_start(ctx);
+    int row_coord = pdhcg_get_grid_row_coord(ctx);
+
+    int safe_local = n_local > 0 ? n_local : 1;
+    int safe_global = n_global > 0 ? n_global : 1;
+
+    double *v_local_d, *Av_global_d;
+    CUDA_CHECK(cudaMalloc(&v_local_d, safe_local * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&Av_global_d, safe_global * sizeof(double)));
+
+    double *v_local_h = (double *)safe_malloc(safe_local * sizeof(double));
+    unsigned int seed = 1234 + row_coord;
+    for (int i = 0; i < safe_local; ++i)
+        v_local_h[i] = (double)rand_r(&seed) / RAND_MAX;
+
+    if (n_local > 0)
+        CUDA_CHECK(cudaMemcpy(v_local_d, v_local_h, n_local * sizeof(double), cudaMemcpyHostToDevice));
+    free(v_local_h);
+
+    cusparseDnVecDescr_t vecV, vecAv;
+    CUSPARSE_CHECK(cusparseCreateDnVec(&vecV, n_local, v_local_d, CUDA_R_64F));
+    CUSPARSE_CHECK(cusparseCreateDnVec(&vecAv, n_global, Av_global_d, CUDA_R_64F));
+
+    pdhcg_spmv_ctx_t *ctx_A = pdhcg_spmv_ctx_create(
+        sparse_handle, n_global, n_local, A->num_nonzeros, A->row_ptr, A->col_ind, A->val, vecV, vecAv);
+
+    double lambda = 0.0;
+
+    for (int i = 0; i < max_iterations; ++i)
+    {
+        double norm = 0.0;
+        if (n_local > 0)
+            CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, n_local, v_local_d, 1, &norm));
+
+        double norm_sq = norm * norm;
+        pdhcg_all_reduce_scalar(ctx, &norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, false);
+        norm = sqrt(norm_sq);
+
+        double inv_norm = 1.0 / norm;
+        if (n_local > 0)
+            CUBLAS_CHECK(cublasDscal(blas_handle, n_local, &inv_norm, v_local_d, 1));
+
+        pdhcg_spmv_execute(sparse_handle, ctx_A, &HOST_ONE, &HOST_ZERO, v_local_d, Av_global_d);
+
+        pdhcg_all_reduce_array(ctx, Av_global_d, n_global, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
+
+        double old_lambda = lambda;
+        double local_dot = 0.0;
+
+        if (n_local > 0)
+        {
+            CUBLAS_CHECK(cublasDdot(blas_handle, n_local, v_local_d, 1, Av_global_d + n_start, 1, &local_dot));
+        }
+
+        pdhcg_all_reduce_scalar(ctx, &local_dot, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, false);
+        lambda = local_dot;
+
+        if (i > 0 && fabs(lambda - old_lambda) < tolerance)
+            break;
+
+        if (n_local > 0)
+            CUDA_CHECK(
+                cudaMemcpy(v_local_d, Av_global_d + n_start, n_local * sizeof(double), cudaMemcpyDeviceToDevice));
+    }
+
+    pdhcg_spmv_ctx_destroy(ctx_A);
+    CUSPARSE_CHECK(cusparseDestroyDnVec(vecV));
+    CUSPARSE_CHECK(cusparseDestroyDnVec(vecAv));
+    CUDA_CHECK(cudaFree(v_local_d));
+    CUDA_CHECK(cudaFree(Av_global_d));
+
+    return lambda;
+}
+
+double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
+                                   cublasHandle_t blas_handle,
+                                   const cu_sparse_matrix_csr_t *A,
+                                   double lambda_max,
+                                   int max_iterations,
+                                   double tolerance,
+                                   struct grid_context_s *ctx)
+{
+    int n_global = A->num_rows;
+    int n_local = A->num_cols;
+    int n_start = get_n_start(ctx);
+    int row_coord = pdhcg_get_grid_row_coord(ctx);
+
+    int safe_local = n_local > 0 ? n_local : 1;
+    int safe_global = n_global > 0 ? n_global : 1;
+
+    double *v_local_d, *Av_global_d, *shifted_v_local_d;
+    CUDA_CHECK(cudaMalloc(&v_local_d, safe_local * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&Av_global_d, safe_global * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&shifted_v_local_d, safe_local * sizeof(double)));
+
+    double *v_local_h = (double *)safe_malloc(safe_local * sizeof(double));
+    unsigned int seed = 1234 + row_coord;
+    for (int i = 0; i < safe_local; ++i)
+        v_local_h[i] = (double)rand_r(&seed) / RAND_MAX;
+
+    if (n_local > 0)
+        CUDA_CHECK(cudaMemcpy(v_local_d, v_local_h, n_local * sizeof(double), cudaMemcpyHostToDevice));
+    free(v_local_h);
+
+    cusparseDnVecDescr_t vecV, vecAv;
+    CUSPARSE_CHECK(cusparseCreateDnVec(&vecV, n_local, v_local_d, CUDA_R_64F));
+    CUSPARSE_CHECK(cusparseCreateDnVec(&vecAv, n_global, Av_global_d, CUDA_R_64F));
+
+    pdhcg_spmv_ctx_t *ctx_A = pdhcg_spmv_ctx_create(
+        sparse_handle, n_global, n_local, A->num_nonzeros, A->row_ptr, A->col_ind, A->val, vecV, vecAv);
+
+    double mu = 0.0;
+
+    for (int i = 0; i < max_iterations; ++i)
+    {
+        double norm = 0.0;
+        if (n_local > 0)
+            CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, n_local, v_local_d, 1, &norm));
+
+        double norm_sq = norm * norm;
+        pdhcg_all_reduce_scalar(ctx, &norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, false);
+        norm = sqrt(norm_sq);
+
+        double inv_norm = 1.0 / norm;
+        if (n_local > 0)
+            CUBLAS_CHECK(cublasDscal(blas_handle, n_local, &inv_norm, v_local_d, 1));
+
+        pdhcg_spmv_execute(sparse_handle, ctx_A, &HOST_ONE, &HOST_ZERO, v_local_d, Av_global_d);
+
+        pdhcg_all_reduce_array(ctx, Av_global_d, n_global, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
+
+        double neg_one = -1.0;
+        double old_mu = mu;
+        double local_dot = 0.0;
+
+        if (n_local > 0)
+        {
+            CUDA_CHECK(cudaMemcpy(
+                shifted_v_local_d, Av_global_d + n_start, n_local * sizeof(double), cudaMemcpyDeviceToDevice));
+            CUBLAS_CHECK(cublasDscal(blas_handle, n_local, &neg_one, shifted_v_local_d, 1));
+            CUBLAS_CHECK(cublasDaxpy(blas_handle, n_local, &lambda_max, v_local_d, 1, shifted_v_local_d, 1));
+            CUBLAS_CHECK(cublasDdot(blas_handle, n_local, v_local_d, 1, shifted_v_local_d, 1, &local_dot));
+        }
+
+        pdhcg_all_reduce_scalar(ctx, &local_dot, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, false);
+        mu = local_dot;
+
+        if (i > 0 && fabs(mu - old_mu) < tolerance)
+            break;
+
+        if (n_local > 0)
+            CUDA_CHECK(cudaMemcpy(v_local_d, shifted_v_local_d, n_local * sizeof(double), cudaMemcpyDeviceToDevice));
+    }
+
+    double lambda_min = lambda_max - mu;
+
+    pdhcg_spmv_ctx_destroy(ctx_A);
+    CUSPARSE_CHECK(cusparseDestroyDnVec(vecV));
+    CUSPARSE_CHECK(cusparseDestroyDnVec(vecAv));
+    CUDA_CHECK(cudaFree(v_local_d));
+    CUDA_CHECK(cudaFree(Av_global_d));
+    CUDA_CHECK(cudaFree(shifted_v_local_d));
+
+    return lambda_min;
+}
+
 double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
                                        cublasHandle_t blas_handle,
                                        const cu_sparse_matrix_csr_t *A,
@@ -1135,62 +1230,16 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
     free(eigenvector_h);
 
     double sigma_max_sq = 1.0;
-    const double one = 1.0;
-    const double zero = 0.0;
-
-    cusparseSpMatDescr_t matA, matAT;
-    CUSPARSE_CHECK(cusparseCreateCsr(&matA,
-                                     A->num_rows,
-                                     A->num_cols,
-                                     A->num_nonzeros,
-                                     A->row_ptr,
-                                     A->col_ind,
-                                     A->val,
-                                     CUSPARSE_INDEX_32I,
-                                     CUSPARSE_INDEX_32I,
-                                     CUSPARSE_INDEX_BASE_ZERO,
-                                     CUDA_R_64F));
-    CUSPARSE_CHECK(cusparseCreateCsr(&matAT,
-                                     AT->num_rows,
-                                     AT->num_cols,
-                                     AT->num_nonzeros,
-                                     AT->row_ptr,
-                                     AT->col_ind,
-                                     AT->val,
-                                     CUSPARSE_INDEX_32I,
-                                     CUSPARSE_INDEX_32I,
-                                     CUSPARSE_INDEX_BASE_ZERO,
-                                     CUDA_R_64F));
 
     cusparseDnVecDescr_t vecEigen, vecNextEigen, vecDual;
     CUSPARSE_CHECK(cusparseCreateDnVec(&vecEigen, m, eigenvector_d, CUDA_R_64F));
     CUSPARSE_CHECK(cusparseCreateDnVec(&vecNextEigen, m, next_eigenvector_d, CUDA_R_64F));
     CUSPARSE_CHECK(cusparseCreateDnVec(&vecDual, n, dual_product_d, CUDA_R_64F));
 
-    void *dBufferAT = NULL, *dBufferA = NULL;
-    size_t bufferSizeAT = 0, bufferSizeA = 0;
-    CUSPARSE_CHECK(cusparseSpMV_bufferSize(sparse_handle,
-                                           CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                           &one,
-                                           matAT,
-                                           vecEigen,
-                                           &zero,
-                                           vecDual,
-                                           CUDA_R_64F,
-                                           CUSPARSE_SPMV_CSR_ALG2,
-                                           &bufferSizeAT));
-    CUSPARSE_CHECK(cusparseSpMV_bufferSize(sparse_handle,
-                                           CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                           &one,
-                                           matA,
-                                           vecDual,
-                                           &zero,
-                                           vecNextEigen,
-                                           CUDA_R_64F,
-                                           CUSPARSE_SPMV_CSR_ALG2,
-                                           &bufferSizeA));
-    CUDA_CHECK(cudaMalloc(&dBufferAT, bufferSizeAT > 0 ? bufferSizeAT : 1));
-    CUDA_CHECK(cudaMalloc(&dBufferA, bufferSizeA > 0 ? bufferSizeA : 1));
+    pdhcg_spmv_ctx_t *ctx_A = pdhcg_spmv_ctx_create(
+        sparse_handle, m, n, A->num_nonzeros, A->row_ptr, A->col_ind, A->val, vecDual, vecNextEigen);
+    pdhcg_spmv_ctx_t *ctx_At = pdhcg_spmv_ctx_create(
+        sparse_handle, n, m, AT->num_nonzeros, AT->row_ptr, AT->col_ind, AT->val, vecEigen, vecDual);
 
     double local_norm = 0.0;
     if (m > 0)
@@ -1205,30 +1254,10 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
 
     for (int i = 0; i < max_iterations; ++i)
     {
-        CUSPARSE_CHECK(cusparseSpMV(sparse_handle,
-                                    CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                    &one,
-                                    matAT,
-                                    vecEigen,
-                                    &zero,
-                                    vecDual,
-                                    CUDA_R_64F,
-                                    CUSPARSE_SPMV_CSR_ALG2,
-                                    dBufferAT));
-
+        pdhcg_spmv_execute(sparse_handle, ctx_At, &HOST_ONE, &HOST_ZERO, eigenvector_d, dual_product_d);
         pdhcg_all_reduce_array(ctx, dual_product_d, n, PDHCG_OP_SUM, PDHCG_SCOPE_COL, 0);
 
-        CUSPARSE_CHECK(cusparseSpMV(sparse_handle,
-                                    CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                    &one,
-                                    matA,
-                                    vecDual,
-                                    &zero,
-                                    vecNextEigen,
-                                    CUDA_R_64F,
-                                    CUSPARSE_SPMV_CSR_ALG2,
-                                    dBufferA));
-
+        pdhcg_spmv_execute(sparse_handle, ctx_A, &HOST_ONE, &HOST_ZERO, dual_product_d, next_eigenvector_d);
         pdhcg_all_reduce_array(ctx, next_eigenvector_d, m, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
 
         double local_dot = 0.0;
@@ -1274,10 +1303,8 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
         CUSPARSE_CHECK(cusparseDnVecSetValues(vecNextEigen, next_eigenvector_d));
     }
 
-    CUDA_CHECK(cudaFree(dBufferAT));
-    CUDA_CHECK(cudaFree(dBufferA));
-    CUSPARSE_CHECK(cusparseDestroySpMat(matA));
-    CUSPARSE_CHECK(cusparseDestroySpMat(matAT));
+    pdhcg_spmv_ctx_destroy(ctx_A);
+    pdhcg_spmv_ctx_destroy(ctx_At);
     CUSPARSE_CHECK(cusparseDestroyDnVec(vecEigen));
     CUSPARSE_CHECK(cusparseDestroyDnVec(vecNextEigen));
     CUSPARSE_CHECK(cusparseDestroyDnVec(vecDual));
@@ -1286,212 +1313,4 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
     CUDA_CHECK(cudaFree(dual_product_d));
 
     return sqrt(sigma_max_sq);
-}
-
-double estimate_maximum_eigenvalue(cusparseHandle_t sparse_handle,
-                                   cublasHandle_t blas_handle,
-                                   const cu_sparse_matrix_csr_t *A,
-                                   int max_iterations,
-                                   double tolerance,
-                                   struct grid_context_s *ctx)
-{
-    int n = A->num_rows;
-    double *v_d, *Av_d;
-
-    CUDA_CHECK(cudaMalloc(&v_d, n * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&Av_d, n * sizeof(double)));
-
-    double *v_h = (double *)malloc(n * sizeof(double));
-    for (int i = 0; i < n; ++i)
-        v_h[i] = get_normal_random();
-
-    CUDA_CHECK(cudaMemcpy(v_d, v_h, n * sizeof(double), cudaMemcpyHostToDevice));
-    free(v_h);
-
-    cusparseSpMatDescr_t matA;
-    cusparseDnVecDescr_t vecV, vecAv;
-
-    CUSPARSE_CHECK(cusparseCreateCsr(&matA,
-                                     n,
-                                     n,
-                                     A->num_nonzeros,
-                                     A->row_ptr,
-                                     A->col_ind,
-                                     A->val,
-                                     CUSPARSE_INDEX_32I,
-                                     CUSPARSE_INDEX_32I,
-                                     CUSPARSE_INDEX_BASE_ZERO,
-                                     CUDA_R_64F));
-
-    CUSPARSE_CHECK(cusparseCreateDnVec(&vecV, n, v_d, CUDA_R_64F));
-    CUSPARSE_CHECK(cusparseCreateDnVec(&vecAv, n, Av_d, CUDA_R_64F));
-
-    double one = 1.0, zero = 0.0;
-    size_t bufferSize = 0;
-    void *dBuffer = NULL;
-    CUSPARSE_CHECK(cusparseSpMV_bufferSize(sparse_handle,
-                                           CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                           &one,
-                                           matA,
-                                           vecV,
-                                           &zero,
-                                           vecAv,
-                                           CUDA_R_64F,
-                                           CUSPARSE_SPMV_CSR_ALG2,
-                                           &bufferSize));
-    CUDA_CHECK(cudaMalloc(&dBuffer, bufferSize));
-
-    double lambda = 0.0;
-
-    for (int i = 0; i < max_iterations; ++i)
-    {
-        double norm;
-        CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, n, v_d, 1, &norm));
-
-        double norm_sq = norm * norm;
-        pdhcg_all_reduce_scalar(ctx, &norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, false);
-        norm = sqrt(norm_sq);
-
-        double inv_norm = 1.0 / norm;
-        CUBLAS_CHECK(cublasDscal(blas_handle, n, &inv_norm, v_d, 1));
-
-        CUSPARSE_CHECK(cusparseSpMV(sparse_handle,
-                                    CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                    &one,
-                                    matA,
-                                    vecV,
-                                    &zero,
-                                    vecAv,
-                                    CUDA_R_64F,
-                                    CUSPARSE_SPMV_CSR_ALG2,
-                                    dBuffer));
-
-        pdhcg_all_reduce_array(ctx, Av_d, n, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
-
-        double old_lambda = lambda;
-        CUBLAS_CHECK(cublasDdot(blas_handle, n, v_d, 1, Av_d, 1, &lambda));
-
-        pdhcg_all_reduce_scalar(ctx, &lambda, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, false);
-
-        if (i > 0 && fabs(lambda - old_lambda) < tolerance)
-        {
-            break;
-        }
-
-        CUDA_CHECK(cudaMemcpy(v_d, Av_d, n * sizeof(double), cudaMemcpyDeviceToDevice));
-    }
-
-    CUDA_CHECK(cudaFree(dBuffer));
-    CUSPARSE_CHECK(cusparseDestroySpMat(matA));
-    CUSPARSE_CHECK(cusparseDestroyDnVec(vecV));
-    CUSPARSE_CHECK(cusparseDestroyDnVec(vecAv));
-    CUDA_CHECK(cudaFree(v_d));
-    CUDA_CHECK(cudaFree(Av_d));
-
-    return lambda;
-}
-
-double estimate_minimum_eigenvalue(cusparseHandle_t sparse_handle,
-                                   cublasHandle_t blas_handle,
-                                   const cu_sparse_matrix_csr_t *A,
-                                   double lambda_max,
-                                   int max_iterations,
-                                   double tolerance,
-                                   struct grid_context_s *ctx)
-{
-    int n = A->num_rows;
-    double *v_d, *Av_d, *shifted_v_d;
-
-    CUDA_CHECK(cudaMalloc(&v_d, n * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&Av_d, n * sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&shifted_v_d, n * sizeof(double)));
-
-    double *v_h = (double *)malloc(n * sizeof(double));
-    for (int i = 0; i < n; ++i)
-        v_h[i] = get_normal_random();
-    CUDA_CHECK(cudaMemcpy(v_d, v_h, n * sizeof(double), cudaMemcpyHostToDevice));
-    free(v_h);
-
-    cusparseSpMatDescr_t matA;
-    cusparseDnVecDescr_t vecV, vecAv;
-    CUSPARSE_CHECK(cusparseCreateCsr(&matA,
-                                     n,
-                                     n,
-                                     A->num_nonzeros,
-                                     A->row_ptr,
-                                     A->col_ind,
-                                     A->val,
-                                     CUSPARSE_INDEX_32I,
-                                     CUSPARSE_INDEX_32I,
-                                     CUSPARSE_INDEX_BASE_ZERO,
-                                     CUDA_R_64F));
-    CUSPARSE_CHECK(cusparseCreateDnVec(&vecV, n, v_d, CUDA_R_64F));
-    CUSPARSE_CHECK(cusparseCreateDnVec(&vecAv, n, Av_d, CUDA_R_64F));
-
-    double one = 1.0, zero = 0.0;
-    size_t bufferSize = 0;
-    CUSPARSE_CHECK(cusparseSpMV_bufferSize(sparse_handle,
-                                           CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                           &one,
-                                           matA,
-                                           vecV,
-                                           &zero,
-                                           vecAv,
-                                           CUDA_R_64F,
-                                           CUSPARSE_SPMV_CSR_ALG2,
-                                           &bufferSize));
-    void *dBuffer = NULL;
-    CUDA_CHECK(cudaMalloc(&dBuffer, bufferSize));
-
-    double mu = 0.0;
-
-    for (int i = 0; i < max_iterations; ++i)
-    {
-        double norm;
-        CUBLAS_CHECK(cublasDnrm2_v2_64(blas_handle, n, v_d, 1, &norm));
-        double norm_sq = norm * norm;
-        pdhcg_all_reduce_scalar(ctx, &norm_sq, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, false);
-        norm = sqrt(norm_sq);
-
-        double inv_norm = 1.0 / norm;
-        CUBLAS_CHECK(cublasDscal(blas_handle, n, &inv_norm, v_d, 1));
-
-        CUSPARSE_CHECK(cusparseSpMV(sparse_handle,
-                                    CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                    &one,
-                                    matA,
-                                    vecV,
-                                    &zero,
-                                    vecAv,
-                                    CUDA_R_64F,
-                                    CUSPARSE_SPMV_CSR_ALG2,
-                                    dBuffer));
-        pdhcg_all_reduce_array(ctx, Av_d, n, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, 0);
-
-        double neg_one = -1.0;
-        CUDA_CHECK(cudaMemcpy(shifted_v_d, Av_d, n * sizeof(double), cudaMemcpyDeviceToDevice));
-        CUBLAS_CHECK(cublasDscal(blas_handle, n, &neg_one, shifted_v_d, 1));
-        CUBLAS_CHECK(cublasDaxpy(blas_handle, n, &lambda_max, v_d, 1, shifted_v_d, 1));
-
-        double old_mu = mu;
-        CUBLAS_CHECK(cublasDdot(blas_handle, n, v_d, 1, shifted_v_d, 1, &mu));
-        pdhcg_all_reduce_scalar(ctx, &mu, PDHCG_OP_SUM, PDHCG_SCOPE_ROW, false);
-
-        if (i > 0 && fabs(mu - old_mu) < tolerance)
-            break;
-
-        CUDA_CHECK(cudaMemcpy(v_d, shifted_v_d, n * sizeof(double), cudaMemcpyDeviceToDevice));
-    }
-
-    double lambda_min = lambda_max - mu;
-
-    CUDA_CHECK(cudaFree(dBuffer));
-    CUSPARSE_CHECK(cusparseDestroySpMat(matA));
-    CUSPARSE_CHECK(cusparseDestroyDnVec(vecV));
-    CUSPARSE_CHECK(cusparseDestroyDnVec(vecAv));
-    CUDA_CHECK(cudaFree(v_d));
-    CUDA_CHECK(cudaFree(Av_d));
-    CUDA_CHECK(cudaFree(shifted_v_d));
-
-    return lambda_min;
 }

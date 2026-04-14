@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 #include "distributed_interface.h"
 #include "distributed_solver.h"
 #include "distributed_types.h"
@@ -27,6 +26,7 @@ limitations under the License.
 #include "presolve_wrapper.h"
 #include "solver.h"
 #include "solver_state.h"
+#include "spmv_backend.h"
 #include "utils.h"
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
@@ -155,19 +155,12 @@ static void allreduce_obj_bound_norm(pdhg_solver_state_t *state, const pdhg_para
 
 pdhcg_result_t *create_result_from_state_distributed(pdhg_solver_state_t *state, const qp_problem_t *original_problem)
 {
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_sol, state->pdhg_dual_solution));
-    CUSPARSE_CHECK(cusparseDnVecSetValues(state->vec_dual_prod, state->dual_product));
-
-    CUSPARSE_CHECK(cusparseSpMV(state->sparse_handle,
-                                CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
-                                state->matAt,
-                                state->vec_dual_sol,
-                                &HOST_ZERO,
-                                state->vec_dual_prod,
-                                CUDA_R_64F,
-                                CUSPARSE_SPMV_CSR_ALG2,
-                                state->dual_spmv_buffer));
+    pdhcg_spmv_execute(state->sparse_handle,
+                       state->spmv_ctx_At,
+                       &HOST_ONE,
+                       &HOST_ZERO,
+                       state->pdhg_dual_solution,
+                       state->dual_product);
 
     pdhcg_all_reduce_array(
         state->grid_context, state->dual_product, state->num_variables, PDHCG_OP_SUM, PDHCG_SCOPE_COL, 0);

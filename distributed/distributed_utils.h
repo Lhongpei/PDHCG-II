@@ -70,8 +70,6 @@ extern "C"
                                              const pdhg_parameters_t *params,
                                              qp_problem_t **out_local_qp,
                                              rescale_info_t **out_local_resc);
-    void initialize_step_size_and_primal_weight_distributed(pdhg_solver_state_t *state,
-                                                            const pdhg_parameters_t *params);
     void gather_distributed_vector(
         double *d_local_vec, int local_len, MPI_Comm comm_check, MPI_Comm comm_gather, double **result_ptr);
     void print_distributed_params(const pdhg_parameters_t *params);

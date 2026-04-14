@@ -20,6 +20,7 @@ limitations under the License.
 #include "cusparse_compat.h"
 #include "distributed_interface.h"
 #include "pdhcg_types.h"
+#include "spmv_backend.h"
 #include <cublas_v2.h>
 #include <cusparse.h>
 
@@ -38,20 +39,23 @@ typedef struct
     cu_sparse_matrix_csr_t *objective_sparse_matrix;
     double *diagonal_objective_matrix;
     quad_obj_type_t quad_obj_type;
-    cusparseSpMatDescr_t matQ;
+
+    pdhcg_spmv_ctx_t *spmv_ctx_Q;
+
     double norm;
     double nonconvexity;
     double *primal_obj_product;
-    void *primal_obj_spmv_buffer;
+
     cusparseDnVecDescr_t vec_primal_obj_prod;
+
     // Low rank Component
     cu_sparse_matrix_csr_t *objective_lowrank_matrix;
     cu_sparse_matrix_csr_t *objective_lowrank_matrix_t;
-    cusparseSpMatDescr_t matR;
-    cusparseSpMatDescr_t matRt;
+    pdhcg_spmv_ctx_t *spmv_ctx_R;
+    pdhcg_spmv_ctx_t *spmv_ctx_Rt;
+
     double *Rx_product;
-    void *Rx_spmv_buffer;
-    void *RRx_spmv_buffer;
+
     cusparseDnVecDescr_t vec_Rx_prod;
     cusparseDnVecDescr_t vec_RRx_prod;
     int num_rank_lowrank_obj;
@@ -164,15 +168,9 @@ typedef struct
 
     cusparseHandle_t sparse_handle;
     cublasHandle_t blas_handle;
-    size_t spmv_buffer_size;
-    size_t primal_spmv_buffer_size;
-    size_t dual_spmv_buffer_size;
-    void *primal_spmv_buffer;
-    void *dual_spmv_buffer;
-    void *spmv_buffer;
 
-    cusparseSpMatDescr_t matA;
-    cusparseSpMatDescr_t matAt;
+    pdhcg_spmv_ctx_t *spmv_ctx_A;
+    pdhcg_spmv_ctx_t *spmv_ctx_At;
     cusparseDnVecDescr_t vec_primal_sol;
     cusparseDnVecDescr_t vec_dual_sol;
     cusparseDnVecDescr_t vec_primal_prod;

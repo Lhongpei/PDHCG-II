@@ -14,33 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-#ifndef PDHCG_SPMV_CUH
-#define PDHCG_SPMV_CUH
-
+#include "spmv_backend.h"
 #include "utils.h"
 #include <cuda_runtime.h>
-#include <cusparse.h>
-#include <stdbool.h>
 #include <stdlib.h>
 
-#define FUSE_ELEMENT_OP 0
-#ifdef PDHCG_USE_SPMVOP
-#ifndef PDHCG_DISTRIBUTED
-#define FUSE_ELEMENT_OP 1
-#endif
-#endif
+// #define FUSE_ELEMENT_OP 0
+// #ifdef PDHCG_USE_SPMVOP
+// #ifndef PDHCG_DISTRIBUTED
+// #define FUSE_ELEMENT_OP 1
+// #endif
+// #endif
 
-typedef struct
-{
-    cusparseSpMatDescr_t mat;
-    cusparseDnVecDescr_t vec_x;
-    cusparseDnVecDescr_t vec_y;
-    void *buffer;
-    void *descr;
-    void *plan;
-} pdhcg_spmv_ctx_t;
-
-static inline bool pdhcg_use_spmvop_by_default(void)
+extern "C" bool pdhcg_use_spmvop_by_default(void)
 {
 #if PDHCG_USE_SPMVOP
     return true;
@@ -49,11 +35,11 @@ static inline bool pdhcg_use_spmvop_by_default(void)
 #endif
 }
 
-static inline void pdhcg_spmv_buffer_size(cusparseHandle_t sparse_handle,
-                                          cusparseSpMatDescr_t mat,
-                                          cusparseDnVecDescr_t vec_x,
-                                          cusparseDnVecDescr_t vec_y,
-                                          size_t *buffer_size)
+static void pdhcg_spmv_buffer_size(cusparseHandle_t sparse_handle,
+                                   cusparseSpMatDescr_t mat,
+                                   cusparseDnVecDescr_t vec_x,
+                                   cusparseDnVecDescr_t vec_y,
+                                   size_t *buffer_size)
 {
 #if PDHCG_USE_SPMVOP
     CUSPARSE_CHECK(cusparseSpMVOp_bufferSize(
@@ -72,13 +58,13 @@ static inline void pdhcg_spmv_buffer_size(cusparseHandle_t sparse_handle,
 #endif
 }
 
-static inline void pdhcg_spmv_prepare(cusparseHandle_t sparse_handle,
-                                      cusparseSpMatDescr_t mat,
-                                      cusparseDnVecDescr_t vec_x,
-                                      cusparseDnVecDescr_t vec_y,
-                                      void *buffer,
-                                      void **descr,
-                                      void **plan)
+static void pdhcg_spmv_prepare(cusparseHandle_t sparse_handle,
+                               cusparseSpMatDescr_t mat,
+                               cusparseDnVecDescr_t vec_x,
+                               cusparseDnVecDescr_t vec_y,
+                               void *buffer,
+                               void **descr,
+                               void **plan)
 {
 #if PDHCG_USE_SPMVOP
     cusparseSpMVOpDescr_t local_descr = NULL;
@@ -104,17 +90,19 @@ static inline void pdhcg_spmv_prepare(cusparseHandle_t sparse_handle,
 #endif
 }
 
-static inline pdhcg_spmv_ctx_t *pdhcg_spmv_ctx_create(cusparseHandle_t sparse_handle,
-                                                      int num_rows,
-                                                      int num_cols,
-                                                      int num_nonzeros,
-                                                      int *row_ptr,
-                                                      int *col_ind,
-                                                      double *val,
-                                                      const double *x_init,
-                                                      double *y_init)
+extern "C" pdhcg_spmv_ctx_t *pdhcg_spmv_ctx_create(cusparseHandle_t sparse_handle,
+                                                   int num_rows,
+                                                   int num_cols,
+                                                   int num_nonzeros,
+                                                   int *row_ptr,
+                                                   int *col_ind,
+                                                   double *val,
+                                                   cusparseDnVecDescr_t vec_x,
+                                                   cusparseDnVecDescr_t vec_y)
 {
     pdhcg_spmv_ctx_t *ctx = (pdhcg_spmv_ctx_t *)safe_calloc(1, sizeof(pdhcg_spmv_ctx_t));
+    ctx->vec_x = vec_x;
+    ctx->vec_y = vec_y;
     size_t buffer_size = 0;
 
     CUSPARSE_CHECK(cusparseCreateCsr(&ctx->mat,
@@ -129,18 +117,18 @@ static inline pdhcg_spmv_ctx_t *pdhcg_spmv_ctx_create(cusparseHandle_t sparse_ha
                                      CUSPARSE_INDEX_BASE_ZERO,
                                      CUDA_R_64F));
 
-    CUSPARSE_CHECK(cusparseCreateDnVec(&ctx->vec_x, num_cols, (void *)x_init, CUDA_R_64F));
-    CUSPARSE_CHECK(cusparseCreateDnVec(&ctx->vec_y, num_rows, y_init, CUDA_R_64F));
-
     pdhcg_spmv_buffer_size(sparse_handle, ctx->mat, ctx->vec_x, ctx->vec_y, &buffer_size);
-    CUDA_CHECK(cudaMalloc(&ctx->buffer, buffer_size));
+    if (buffer_size > 0)
+    {
+        CUDA_CHECK(cudaMalloc(&ctx->buffer, buffer_size));
+    }
 
     pdhcg_spmv_prepare(sparse_handle, ctx->mat, ctx->vec_x, ctx->vec_y, ctx->buffer, &ctx->descr, &ctx->plan);
 
     return ctx;
 }
 
-static inline void pdhcg_spmv_ctx_destroy(pdhcg_spmv_ctx_t *ctx)
+extern "C" void pdhcg_spmv_ctx_destroy(pdhcg_spmv_ctx_t *ctx)
 {
     if (ctx == NULL)
         return;
@@ -154,36 +142,35 @@ static inline void pdhcg_spmv_ctx_destroy(pdhcg_spmv_ctx_t *ctx)
 
     if (ctx->buffer)
         CUDA_CHECK(cudaFree(ctx->buffer));
-    if (ctx->vec_x)
-        CUSPARSE_CHECK(cusparseDestroyDnVec(ctx->vec_x));
-    if (ctx->vec_y)
-        CUSPARSE_CHECK(cusparseDestroyDnVec(ctx->vec_y));
     if (ctx->mat)
         CUSPARSE_CHECK(cusparseDestroySpMat(ctx->mat));
 
     free(ctx);
 }
 
-static inline void pdhcg_spmv_execute(cusparseHandle_t sparse_handle, pdhcg_spmv_ctx_t *ctx, const double *x, double *y)
+extern "C" void pdhcg_spmv_execute(cusparseHandle_t sparse_handle,
+                                   pdhcg_spmv_ctx_t *ctx,
+                                   const double *alpha,
+                                   const double *beta,
+                                   const double *x,
+                                   double *y)
 {
     CUSPARSE_CHECK(cusparseDnVecSetValues(ctx->vec_x, (void *)x));
     CUSPARSE_CHECK(cusparseDnVecSetValues(ctx->vec_y, y));
 
 #if PDHCG_USE_SPMVOP
     CUSPARSE_CHECK(cusparseSpMVOp(
-        sparse_handle, (cusparseSpMVOpPlan_t)ctx->plan, &HOST_ONE, &HOST_ZERO, ctx->vec_x, ctx->vec_y, ctx->vec_y));
+        sparse_handle, (cusparseSpMVOpPlan_t)ctx->plan, alpha, beta, ctx->vec_x, ctx->vec_y, ctx->vec_y));
 #else
     CUSPARSE_CHECK(cusparseSpMV(sparse_handle,
                                 CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &HOST_ONE,
+                                alpha,
                                 ctx->mat,
                                 ctx->vec_x,
-                                &HOST_ZERO,
+                                beta,
                                 ctx->vec_y,
                                 CUDA_R_64F,
                                 CUSPARSE_SPMV_CSR_ALG2,
                                 ctx->buffer));
 #endif
 }
-
-#endif // PDHCG_SPMV_CUH
