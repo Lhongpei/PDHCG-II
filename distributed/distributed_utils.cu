@@ -745,6 +745,8 @@ void distribute_data_bcast_then_partition(const qp_problem_t *working_problem,
             free(buf);
     }
 
+    grid_context->global_num_variables = current_working_problem->num_variables;
+
     {
         char *buf = NULL;
         size_t sz = 0;
