@@ -344,7 +344,7 @@ void pdhg_update(pdhg_solver_state_t *state)
     if (state->quadratic_objective_term->nonconvexity < 0)
     {
         primal_step_size = fmax(primal_step_size, -1.01 * fmin(0.0, state->quadratic_objective_term->nonconvexity));
-        primal_step_size /= 2;
+        primal_step_size /= 100;
     }
     double dual_step_size = state->step_size * state->primal_weight;
 

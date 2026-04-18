@@ -11,6 +11,7 @@ set(PDHCG_VERSION_PATCH 5)
 
 set(PDHCG_VERSION "${PDHCG_VERSION_MAJOR}.${PDHCG_VERSION_MINOR}.${PDHCG_VERSION_PATCH}")
 add_compile_definitions(PDHCG_VERSION="${PDHCG_VERSION}")
+add_compile_definitions(CUSPARSE_ENABLE_EXPERIMENTAL_API)
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 
@@ -51,7 +52,7 @@ include(CMakeDependentOption)
 option(PDHCG_BUILD_STATIC_LIB "Build the PDHCG static library" ON)
 option(PDHCG_BUILD_SHARED_LIB "Build the PDHCG shared library" ON)
 option(PDHCG_COMPILE_PSQP "Download and use PSQP for presolving" OFF)
-option(PDHCG_COMPILE_DISTRIBUTED "Enable distributed computing with MPI" ON)
+option(PDHCG_COMPILE_DISTRIBUTED "Enable distributed computing with MPI" OFF)
 
 # format: cmake_dependent_option(OPTION "docstring" DEFAULT_VALUE "DEPENDENCY_VARIABLE" FORCE_OFF_VALUE)
 cmake_dependent_option(PDHCG_BUILD_PYTHON "Build the PDHCG Python bindings" OFF

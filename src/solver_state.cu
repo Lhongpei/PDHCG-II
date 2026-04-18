@@ -56,6 +56,8 @@ int get_n_start(grid_context_t *ctx)
     {
         start = ctx->n_start;
     }
+#else
+    (void)ctx;
 #endif
     return start;
 }

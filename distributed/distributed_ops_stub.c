@@ -40,10 +40,12 @@ void pdhcg_all_reduce_scalar(
 
 int pdhcg_get_grid_p_col(struct grid_context_s *ctx)
 {
+    (void)ctx;
     return 1;
 }
 
 int pdhcg_get_grid_row_coord(struct grid_context_s *ctx)
 {
+    (void)ctx;
     return 0;
 }
