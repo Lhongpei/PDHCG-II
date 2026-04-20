@@ -1,5 +1,4 @@
 /*
-Copyright 2025 Haihao Lu
 Copyright 2026 Hongpei Li
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,16 +16,26 @@ limitations under the License.
 
 #pragma once
 
-#include "internal_types.h"
+#include <mpi.h>
+#include <nccl.h>
 
-#ifdef __cplusplus
-extern "C"
+struct grid_context_s
 {
-#endif
-    processed_qp_problem_t *preprocess_qp_problem(const qp_problem_t *raw_problem);
-    void free_processed_qp_problem(processed_qp_problem_t *processed);
-    rescale_info_t *rescale_problem(const pdhg_parameters_t *params, const qp_problem_t *original_problem);
+    MPI_Comm comm_global;
+    MPI_Comm comm_row;
+    MPI_Comm comm_col;
+    ncclComm_t nccl_row;
+    ncclComm_t nccl_col;
+    ncclComm_t nccl_global;
+    int rank_global;
+    int coords[2];
+    int dims[2];
+    int global_num_variables;
+    int n_start;
+};
 
-#ifdef __cplusplus
-}
-#endif
+typedef struct
+{
+    MPI_Request *reqs;
+    int num_reqs;
+} big_request_t;

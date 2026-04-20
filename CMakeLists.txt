@@ -11,6 +11,7 @@ set(PDHCG_VERSION_PATCH 5)
 
 set(PDHCG_VERSION "${PDHCG_VERSION_MAJOR}.${PDHCG_VERSION_MINOR}.${PDHCG_VERSION_PATCH}")
 add_compile_definitions(PDHCG_VERSION="${PDHCG_VERSION}")
+add_compile_definitions(CUSPARSE_ENABLE_EXPERIMENTAL_API)
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 
@@ -25,10 +26,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.23")
-    set(CMAKE_CUDA_ARCHITECTURES all)
-else()
-    set(CMAKE_CUDA_ARCHITECTURES 60 61 70 75 80 86 89 90 90-virtual)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+  set(CMAKE_CUDA_ARCHITECTURES 60 70 75 80 86 89 90)
 endif()
 
 # Global Compile flags (corresponding to CFLAGS/NVCCFLAGS)
@@ -50,9 +49,8 @@ include(CMakeDependentOption)
 
 option(PDHCG_BUILD_STATIC_LIB "Build the PDHCG static library" ON)
 option(PDHCG_BUILD_SHARED_LIB "Build the PDHCG shared library" ON)
-
-# PSQP Presolver
-option(PDHCG_USE_PSQP "Download and use PSQP for presolving" OFF)
+option(PDHCG_COMPILE_PSQP "Download and use PSQP for presolving" OFF)
+option(PDHCG_COMPILE_DISTRIBUTED "Enable distributed computing with MPI" OFF)
 
 # format: cmake_dependent_option(OPTION "docstring" DEFAULT_VALUE "DEPENDENCY_VARIABLE" FORCE_OFF_VALUE)
 cmake_dependent_option(PDHCG_BUILD_PYTHON "Build the PDHCG Python bindings" OFF
@@ -82,7 +80,7 @@ include(FetchContent)
 # -----------------------------------------------------------------------------
 # PSQP (QP Presolver) Integration
 # -----------------------------------------------------------------------------
-if(PDHCG_USE_PSQP)
+if(PDHCG_COMPILE_PSQP)
     # Use FetchContent to automatically download PSQP from git repository
     set(PSQP_VERSION_TAG "main" CACHE STRING "PSQP git tag/branch to use")
 
@@ -113,7 +111,7 @@ if(PDHCG_USE_PSQP)
         message(WARNING "PSQP target not found. Presolving features will be disabled.")
     endif()
 else()
-    message(STATUS "PSQP integration disabled by user (PDHCG_USE_PSQP=OFF).")
+    message(STATUS "PSQP integration disabled by user (PDHCG_COMPILE_PSQP=OFF).")
 endif()
 
 # -----------------------------------------------------------------------------
@@ -126,6 +124,7 @@ file(GLOB C_SOURCES
 file(GLOB CU_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu"
 )
+
 # Exclude cli.c from library builds
 list(REMOVE_ITEM C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/cli.c")
 
@@ -135,6 +134,21 @@ set(CORE_INCLUDE_DIRS
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/internal    # Internal implementation headers
 )
 
+if(PDHCG_COMPILE_DISTRIBUTED)
+    add_definitions(-DPDHCG_COMPILE_DISTRIBUTED)
+    file(GLOB DIST_C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/distributed/*.c")
+    file(GLOB DIST_CU_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/distributed/*.cu")
+    list(REMOVE_ITEM DIST_C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/distributed/distributed_ops_stub.c")
+
+    list(APPEND C_SOURCES ${DIST_C_SOURCES})
+    list(APPEND CU_SOURCES ${DIST_CU_SOURCES})
+
+    list(APPEND CORE_INCLUDE_DIRS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/distributed)
+else()
+    list(APPEND C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/distributed/distributed_ops_stub.c")
+    list(APPEND CORE_INCLUDE_DIRS PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/distributed)
+endif()
+
 # Set common link libraries
 set(CORE_LINK_LIBS PUBLIC
   CUDA::cudart
@@ -143,13 +157,39 @@ set(CORE_LINK_LIBS PUBLIC
   ZLIB::ZLIB
 )
 
-if(PDHCG_USE_PSQP AND TARGET PSQP)
+if(PDHCG_COMPILE_PSQP AND TARGET PSQP)
     list(APPEND CORE_LINK_LIBS PUBLIC PSQP)
     set(PDHCG_OPTIONAL_DEFINES "PSQP_AVAILABLE")
 else()
     set(PDHCG_OPTIONAL_DEFINES "")
 endif()
 
+if(PDHCG_COMPILE_DISTRIBUTED)
+    find_package(MPI REQUIRED)
+    add_compile_definitions(PDHCG_COMPILE_DISTRIBUTED)
+    message(STATUS "PDHCG Distributed Mode: ENABLED (MPI/NCCL support activated)")
+else()
+    message(STATUS "PDHCG Distributed Mode: DISABLED (Building for single-node execution)")
+endif()
+
+
+if(PDHCG_COMPILE_DISTRIBUTED AND MPI_FOUND)
+    list(APPEND CORE_LINK_LIBS MPI::MPI_CXX)
+    include_directories(${MPI_CXX_INCLUDE_PATH})
+    find_library(NCCL_LIB NAMES nccl
+                 PATHS ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}
+                       $ENV{NCCL_ROOT}/lib
+                       /usr/local/cuda/lib64
+                       /usr/lib/x86_64-linux-gnu)
+
+    if(NCCL_LIB)
+        message(STATUS "Found NCCL: ${NCCL_LIB}")
+        list(APPEND CORE_LINK_LIBS ${NCCL_LIB})
+    else()
+        message(WARNING "NCCL library not found explicitly, falling back to -lnccl")
+        list(APPEND CORE_LINK_LIBS nccl)
+    endif()
+endif()
 # -----------------------------------------------------------------------------
 # 1. Core STATIC Library (pdhcg_core)
 # -----------------------------------------------------------------------------
@@ -208,6 +248,11 @@ if(PDHCG_BUILD_CLI)
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/internal
     )
+
+    if(PDHCG_COMPILE_DISTRIBUTED)
+        target_include_directories(PDHCG_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/distributed)
+        target_compile_definitions(PDHCG_cli PRIVATE PDHCG_COMPILE_DISTRIBUTED)
+    endif()
 
     # Link CLI to the static core library
     target_link_libraries(PDHCG_cli PRIVATE pdhcg_core)
