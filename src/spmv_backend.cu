@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
+#include "cusparse_compat.h"
 #include "spmv_backend.h"
 #include "utils.h"
 #include <cuda_runtime.h>

@@ -14,9 +14,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 #include "pdhcg_kernels.cuh"
 #include "solver_state.h"
+#include "spmv_backend.h"
 #include "utils.h"
 #include <math.h>
 #include <random>
@@ -410,6 +410,7 @@ void print_initial_info(const pdhg_parameters_t *params, const qp_problem_t *pro
     printf("  eps_opt            : %.1e\n", params->termination_criteria.eps_optimal_relative);
     printf("  eps_feas           : %.1e\n", params->termination_criteria.eps_feasible_relative);
     printf("  eps_infeas_detect  : %.1e\n", params->termination_criteria.eps_infeasible);
+    printf("  spmv backend       : %s\n", pdhcg_use_spmvop_by_default() ? "SpMVOp" : "SpMV");
     if (params->optimality_norm != default_params.optimality_norm)
     {
         printf("  optimality_norm    : %s\n", params->optimality_norm == NORM_TYPE_L_INF ? "L_inf" : "L2");
