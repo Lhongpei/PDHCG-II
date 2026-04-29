@@ -1208,7 +1208,6 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
     int m = A->num_rows;
     int n = A->num_cols;
 
-    int P_col = pdhcg_get_grid_p_col(ctx);
     int row_coord = pdhcg_get_grid_row_coord(ctx);
 
     int safe_m = m > 0 ? m : 1;
@@ -1223,7 +1222,7 @@ double estimate_maximum_singular_value(cusparseHandle_t sparse_handle,
     unsigned int seed = 1234 + row_coord;
     for (int i = 0; i < safe_m; ++i)
     {
-        eigenvector_h[i] = (double)rand_r(&seed) / RAND_MAX;
+        eigenvector_h[i] = ((double)rand_r(&seed) / (double)RAND_MAX) * 2.0 - 1.0;
     }
     if (m > 0)
         CUDA_CHECK(cudaMemcpy(eigenvector_d, eigenvector_h, m * sizeof(double), cudaMemcpyHostToDevice));

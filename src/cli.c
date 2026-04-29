@@ -607,29 +607,28 @@ int run_d_pdhcg(int argc, char *argv[])
 }
 #endif // PDHCG_COMPILE_DISTRIBUTED
 
-int is_running_under_mpi()
-{
-    if (getenv("OMPI_COMM_WORLD_RANK") != NULL)
-        return 1;
-    if (getenv("PMI_RANK") != NULL)
-        return 1;
-    if (getenv("PMI_SIZE") != NULL)
-        return 1;
-    if (getenv("I_MPI_RANK") != NULL)
-        return 1;
-    return 0;
-}
-
 int main(int argc, char *argv[])
 {
 #ifdef PDHCG_COMPILE_DISTRIBUTED
-    if (is_running_under_mpi())
+    int mpi_initialized = 0;
+    MPI_Initialized(&mpi_initialized);
+    if (!mpi_initialized)
+    {
+        MPI_Init(&argc, &argv);
+    }
+
+    int world_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    if (world_size > 1)
     {
         return run_d_pdhcg(argc, argv);
     }
     else
     {
-        return run_pdhcg(argc, argv);
+        int ret = run_pdhcg(argc, argv);
+        MPI_Finalize();
+        return ret;
     }
 #else
     return run_pdhcg(argc, argv);

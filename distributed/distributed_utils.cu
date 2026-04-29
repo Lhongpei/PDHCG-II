@@ -974,17 +974,16 @@ void print_distributed_params(const pdhg_parameters_t *params)
 {
     if (params->verbose < 2)
         return;
-    printf("------------------------------ Distributed Configuration "
-           "------------------------------\n");
+    printf("------------------------------------ Distributed Configuration "
+           "------------------------------------\n");
 
     if (params->grid_size.decided)
     {
-        printf(
-            "   Grid Size         : %d x %d (Rows x Cols)\n", params->grid_size.row_dims, params->grid_size.col_dims);
+        printf("  Grid Size         : %d x %d (Rows x Cols)\n", params->grid_size.row_dims, params->grid_size.col_dims);
     }
     else
     {
-        printf("   Grid Size         : Auto-detect (implementation dependent)\n");
+        printf("  Grid Size         : Auto-detect (implementation dependent)\n");
     }
 
     printf("  Partition Method   : ");
@@ -1018,6 +1017,5 @@ void print_distributed_params(const pdhg_parameters_t *params)
             break;
     }
 
-    printf("---------------------------------------------------------------------"
-           "------------------\n");
+    printf("---------------------------------------------------------------------------------------------------\n");
 }
