@@ -17,7 +17,10 @@ limitations under the License.
 
 #pragma once
 
+#include "cusparse_compat.h"
+#include "distributed_interface.h"
 #include "pdhcg_types.h"
+#include "spmv_backend.h"
 #include <cublas_v2.h>
 #include <cusparse.h>
 
@@ -36,23 +39,30 @@ typedef struct
     cu_sparse_matrix_csr_t *objective_sparse_matrix;
     double *diagonal_objective_matrix;
     quad_obj_type_t quad_obj_type;
-    cusparseSpMatDescr_t matQ;
+
+    pdhcg_spmv_ctx_t *spmv_ctx_Q;
+
     double norm;
     double nonconvexity;
     double *primal_obj_product;
-    void *primal_obj_spmv_buffer;
+
     cusparseDnVecDescr_t vec_primal_obj_prod;
+
     // Low rank Component
     cu_sparse_matrix_csr_t *objective_lowrank_matrix;
     cu_sparse_matrix_csr_t *objective_lowrank_matrix_t;
-    cusparseSpMatDescr_t matR;
-    cusparseSpMatDescr_t matRt;
+    pdhcg_spmv_ctx_t *spmv_ctx_R;
+    pdhcg_spmv_ctx_t *spmv_ctx_Rt;
+
     double *Rx_product;
-    void *Rx_spmv_buffer;
-    void *RRx_spmv_buffer;
+
     cusparseDnVecDescr_t vec_Rx_prod;
     cusparseDnVecDescr_t vec_RRx_prod;
     int num_rank_lowrank_obj;
+
+    // Buffer for Distributed Version
+    double *global_primal_obj_product;
+    cusparseDnVecDescr_t vec_global_primal_obj_prod;
 } quadratic_objective_term_t;
 
 typedef struct
@@ -158,15 +168,9 @@ typedef struct
 
     cusparseHandle_t sparse_handle;
     cublasHandle_t blas_handle;
-    size_t spmv_buffer_size;
-    size_t primal_spmv_buffer_size;
-    size_t dual_spmv_buffer_size;
-    void *primal_spmv_buffer;
-    void *dual_spmv_buffer;
-    void *spmv_buffer;
 
-    cusparseSpMatDescr_t matA;
-    cusparseSpMatDescr_t matAt;
+    pdhcg_spmv_ctx_t *spmv_ctx_A;
+    pdhcg_spmv_ctx_t *spmv_ctx_At;
     cusparseDnVecDescr_t vec_primal_sol;
     cusparseDnVecDescr_t vec_dual_sol;
     cusparseDnVecDescr_t vec_primal_prod;
@@ -180,11 +184,42 @@ typedef struct
 
     problem_type_t problem_type;
     inner_solver_t *inner_solver;
+    grid_context_t *grid_context;
 } pdhg_solver_state_t;
 
 typedef struct
 {
+    int num_variables;
+    int num_constraints;
+    int num_rank_lowrank_obj;
+    double *variable_lower_bound;
+    double *variable_upper_bound;
+    double *objective_vector;
+    double objective_constant;
+
+    CsrComponent *constraint_matrix;
+    int constraint_matrix_num_nonzeros;
+
+    CsrComponent *objective_sparse_matrix;
+    int objective_sparse_matrix_num_nonzeros;
+
+    CsrComponent *objective_lowrank_matrix;
+    int objective_lowrank_matrix_num_nonzeros;
+
+    double *diagonal_quad_objective;
+
+    double *constraint_lower_bound;
+    double *constraint_upper_bound;
+
+    double *primal_start;
+    double *dual_start;
+    quad_obj_type_t quad_type;
+} processed_qp_problem_t;
+
+typedef struct
+{
     qp_problem_t *scaled_problem;
+    processed_qp_problem_t *processed_problem;
     double *con_rescale;
     double *var_rescale;
     double con_bound_rescale;

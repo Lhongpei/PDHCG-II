@@ -99,3 +99,38 @@ m.optimize()
 # Disable Pock-Chambolle rescaling
 ./build/bin/pdhcg problem.mps ./output --no_pock_chambolle
 ```
+
+## Multi-GPU Distributed Examples
+
+These examples require the solver to be built with `-DPDHCG_COMPILE_DISTRIBUTED=ON`.
+
+### Basic Multi-GPU Run
+
+```bash
+# Run on 4 GPUs
+mpirun -n 4 ./build/bin/pdhcg problem.mps ./output
+```
+
+### Custom Process Grid
+
+By default, the solver attempts to infer a square-ish 2D process grid. You can explicitly set the grid dimensions:
+
+```bash
+# Use a 2x4 grid (8 GPUs total)
+mpirun -n 8 ./build/bin/pdhcg problem.mps ./output --grid_size 2,4
+```
+
+### Partition and Permutation Options
+
+```bash
+# Uniform row partitioning with block permutation
+mpirun -n 4 ./build/bin/pdhcg problem.mps ./output \
+    --partition_method uniform \
+    --permute_method block \
+    --permute_block_size 512
+
+# Nonzero-balanced partitioning with random permutation
+mpirun -n 4 ./build/bin/pdhcg problem.mps ./output \
+    --partition_method nnz \
+    --permute_method random
+```

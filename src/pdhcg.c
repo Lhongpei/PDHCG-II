@@ -24,6 +24,10 @@ limitations under the License.
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+#include "distributed_solver.h"
+#endif
+
 volatile sig_atomic_t g_pdhcg_cancel_request = 0;
 
 // create an qp_problem_t from a matrix
@@ -420,3 +424,10 @@ pdhcg_result_t *solve_qp_problem(const qp_problem_t *prob, const pdhg_parameters
 
     return res;
 }
+
+#ifdef PDHCG_COMPILE_DISTRIBUTED
+pdhcg_result_t *solve_qp_problem_distributed(const pdhg_parameters_t *params, const qp_problem_t *original_problem)
+{
+    return distributed_optimize(params, original_problem);
+}
+#endif

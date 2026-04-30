@@ -1,21 +1,27 @@
 # **Python Interface for PDHCG**
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) 
-[![PyPI version](https://badge.fury.io/py/pdhcg.svg)](https://pypi.org/project/pdhcg/) 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![PyPI version](https://badge.fury.io/py/pdhcg.svg)](https://pypi.org/project/pdhcg/)
 [![Publication](https://img.shields.io/badge/DOI-10.1287/ijoc.2024.0983-B31B1B.svg)](https://pubsonline.informs.org/doi/10.1287/ijoc.2024.0983)
 [![arXiv](https://img.shields.io/badge/arXiv-2405.16160-b31b1b.svg)](https://arxiv.org/abs/2405.16160)
 
-This is the Python interface to **[`PDHCG`](../README.md)**, a GPU-accelerated first-order solver for large-scale Quadratic Programming (QP).  
+This is the Python interface to **[`PDHCG`](../README.md)**, a GPU-accelerated first-order solver for large-scale Quadratic Programming (QP).
 It provides a high-level, Pythonic API for constructing, modifying, and solving QPs using NumPy and SciPy data structures.
 
 ## Installation
 
 ### Requirements
-- Python ≥ 3.8  
-- NumPy ≥ 1.21  
-- SciPy ≥ 1.8  
-- An NVIDIA GPU with CUDA support (≥12.4 required)  
-- A C/C++ toolchain with GCC and NVCC  
+- Python ≥ 3.8
+- NumPy ≥ 1.21
+- SciPy ≥ 1.8
+- An NVIDIA GPU with CUDA support (≥12.4 required)
+- A C/C++ toolchain with GCC and NVCC
+
+!!! note "CUDA Version and SpMVOp"
+    PDHCG automatically detects your CUDA version at compile time:
+
+    - **CUDA 13+**: Uses cuSPARSE **SpMVOp** (fused SpMV + elementwise operations) for improved performance.
+    - **CUDA 12.x**: Falls back to the standard **SpMV** API. No manual intervention is required.
 
 ### Install
 Install from PyPI:
@@ -36,7 +42,7 @@ pip install .
 If your system has multiple CUDA installations or the default nvcc (typically in `/usr/bin/nvcc`) is outdated, you must explicitly point to your modern CUDA compiler using environment variables. This ensures the build system bypasses the system default.
 
 ```Bash
-# Replace '/your/path/to/nvcc' with your actual path 
+# Replace '/your/path/to/nvcc' with your actual path
 # Example: export CUDACXX=/usr/local/cuda-12.6/bin/nvcc
 export CUDACXX=/your/path/to/nvcc
 export SKBUILD_CMAKE_ARGS="-DCMAKE_CUDA_COMPILER=/your/path/to/nvcc"
@@ -112,7 +118,7 @@ $$
 
 - **objective_matrix** (`Q`, optional): Quadratic part of the objective function. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
 - **objective_matrix_low_rank** (`R`, optional): Low-rank factor matrix in the quadratic objective term. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
-- **objective_vector** (`c`): Linear part of the objective function.  
+- **objective_vector** (`c`): Linear part of the objective function.
 - **constraint_matrix** (`A`): Coefficient matrix for the constraints. Both dense (`numpy.ndarray`) and sparse (`scipy.sparse.csr_matrix`) inputs are supported.
 - **constraint_lower_bound** (`l`): Lower bounds for each constraint. Use `-np.inf` or `None` for no lower bound.
 - **constraint_upper_bound** (`u`): Upper bounds for each constraint. Use `+np.inf` or `None` for no upper bound.
@@ -120,7 +126,7 @@ $$
 - **variable_upper_bound** (`ub`, optional): Upper bounds for the decision variables. Defaults to `+np.inf` for all variables if not provided.
 - **objective_constant** (`c0`, optional): Constant offset in the objective function. Defaults to `0.0`.
 
-To initialize a quadratic programming problem, you need to provide the objective matrix and vector, constraint matrix, and bounds on both constraints and variables.  
+To initialize a quadratic programming problem, you need to provide the objective matrix and vector, constraint matrix, and bounds on both constraints and variables.
 
 ```python
 Q = sp.csc_matrix([[1.0, -1.0], [-1.0, 2.0]])
@@ -145,7 +151,7 @@ m = Model(objective_matrix=Q,
 
 ## Model Sense
 
-By default, `pdhcg` solves **minimization problems**.  
+By default, `pdhcg` solves **minimization problems**.
 
 To switch between minimization and maximization, set the attribute `ModelSense`:
 

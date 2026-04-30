@@ -78,6 +78,31 @@ Solves the QP problem using the PDHCG algorithm.
 
 ---
 
+## solve_qp_problem_distributed
+
+```c
+pdhcg_result_t *solve_qp_problem_distributed(
+    const pdhg_parameters_t *params,
+    const qp_problem_t *original_problem
+);
+```
+
+Solves the QP problem using the distributed multi-GPU PDHCG algorithm.
+
+!!! note "Availability"
+    This function is only available when PDHCG is compiled with `-DPDHCG_COMPILE_DISTRIBUTED=ON`.
+
+**Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `params` | Solver parameters (including `partition_method`, `permute_method`, `grid_size`, and `permute_block_size`) |
+| `original_problem` | QP problem pointer (only required on rank 0; can be NULL on other ranks) |
+
+**Returns:** Pointer to `pdhcg_result_t` containing solution information (valid on all ranks; only rank 0 writes output).
+
+---
+
 ## set_default_parameters
 
 ```c

@@ -73,6 +73,19 @@ int main() {
 }
 ```
 
+## Distributed / Multi-GPU Solving
+
+PDHCG supports distributed solving across multiple GPUs via MPI and NCCL. When compiled with `-DPDHCG_COMPILE_DISTRIBUTED=ON`, the public header `pdhcg.h` conditionally declares:
+
+```c
+pdhcg_result_t *solve_qp_problem_distributed(const pdhg_parameters_t *params,
+                                             const qp_problem_t *original_problem);
+```
+
+Use `solve_qp_problem_distributed()` in place of `solve_qp_problem()`, and launch your program with `mpirun` (or `mpiexec`).
+
+See the [C API Functions](functions.md) reference for details, and the [Examples](../examples.md) page for usage examples.
+
 ## Main Functions
 
 ### Problem Creation
