@@ -11,6 +11,7 @@ typedef enum {
   TERMINATION_REASON_INFEASIBLE_OR_UNBOUNDED,
   TERMINATION_REASON_TIME_LIMIT,
   TERMINATION_REASON_ITERATION_LIMIT,
+  TERMINATION_REASON_USER_INTERRUPT,
   TERMINATION_REASON_FEAS_POLISH_SUCCESS
 } termination_reason_t;
 ```
@@ -24,6 +25,7 @@ typedef enum {
 | `TERMINATION_REASON_INFEASIBLE_OR_UNBOUNDED` | Problem is infeasible or unbounded |
 | `TERMINATION_REASON_TIME_LIMIT` | Time limit reached |
 | `TERMINATION_REASON_ITERATION_LIMIT` | Iteration limit reached |
+| `TERMINATION_REASON_USER_INTERRUPT` | Solver interrupted by user signal |
 | `TERMINATION_REASON_FEAS_POLISH_SUCCESS` | Feasibility polishing succeeded |
 
 ## Norm Type
@@ -172,6 +174,48 @@ typedef struct {
 } inner_solver_parameters_t;
 ```
 
+## Partition Method
+
+```c
+typedef enum {
+  UNIFORM_PARTITION,
+  NNZ_BALANCE_PARTITION,
+} partition_method_t;
+```
+
+| Value | Description |
+|-------|-------------|
+| `UNIFORM_PARTITION` | Uniform row partitioning across the process grid |
+| `NNZ_BALANCE_PARTITION` | Nonzero-balanced partitioning (default) |
+
+## Permute Method
+
+```c
+typedef enum {
+  NO_PERMUTATION,
+  FULL_RANDOM_PERMUTATION,
+  BLOCK_RANDOM_PERMUTATION,
+} permute_method_t;
+```
+
+| Value | Description |
+|-------|-------------|
+| `NO_PERMUTATION` | No permutation applied |
+| `FULL_RANDOM_PERMUTATION` | Full random permutation |
+| `BLOCK_RANDOM_PERMUTATION` | Block-wise random permutation (default) |
+
+## Grid Size
+
+```c
+typedef struct {
+  int row_dims;
+  int col_dims;
+  bool decided;
+} grid_size_t;
+```
+
+Describes the 2D process grid for distributed solving. If `decided` is `false`, the solver attempts to infer a suitable grid automatically.
+
 ## PDHG Parameters
 
 ```c
@@ -190,6 +234,11 @@ typedef struct {
   bool feasibility_polishing;
   norm_type_t optimality_norm;
   inner_solver_parameters_t inner_solver_parameters;
+  bool presolve;
+  partition_method_t partition_method;
+  permute_method_t permute_method;
+  grid_size_t grid_size;
+  int permute_block_size;
 } pdhg_parameters_t;
 ```
 
@@ -229,5 +278,9 @@ typedef struct {
   termination_reason_t termination_reason;
   double feasibility_polishing_time;
   int feasibility_iteration;
+
+  // Presolve information
+  double presolve_time;
+  int presolve_status;
 } pdhcg_result_t;
 ```

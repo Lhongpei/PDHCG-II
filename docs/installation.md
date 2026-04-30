@@ -5,6 +5,13 @@
 - **GPU**: NVIDIA GPU with CUDA 12.4+
 - **Build Tools**: CMake (≥ 3.20), GCC, NVCC
 - **Python**: Python 3.8+ (for Python bindings)
+- **Distributed (Optional)**: MPI (e.g., OpenMPI) and NCCL for multi-GPU support
+
+!!! note "CUDA Version and SpMVOp"
+    PDHCG automatically detects your CUDA version at compile time:
+
+    - **CUDA 13+**: Uses cuSPARSE **SpMVOp** (fused SpMV + elementwise operations) for improved performance.
+    - **CUDA 12.x**: Falls back to the standard **SpMV** API. No manual intervention is required.
 
 ## C++ Executable
 
@@ -31,6 +38,17 @@ CUDACXX=/your/path/to/nvcc cmake -S . -B build
 cmake --build build --clean-first
 ```
 
+### Build with Multi-GPU Support
+
+To enable distributed multi-GPU solving, turn on the `PDHCG_COMPILE_DISTRIBUTED` CMake option. This requires MPI and NCCL to be installed on your system.
+
+```bash
+cmake -S . -B build -DPDHCG_COMPILE_DISTRIBUTED=ON
+cmake --build build --clean-first
+```
+
+When enabled, the solver binary automatically detects whether it is launched with multiple MPI ranks and switches to the distributed solver.
+
 ## Python Package
 
 ### From PyPI (Recommended)
@@ -55,6 +73,17 @@ For development with editable install:
 git clone https://github.com/Lhongpei/PDHCG-II.git
 cd PDHCG-II
 pip install -e ".[test]"
+```
+
+If your system has multiple CUDA installations or the default nvcc (typically in `/usr/bin/nvcc`) is outdated, you must explicitly point to your modern CUDA compiler using environment variables:
+
+```bash
+# Replace '/your/path/to/nvcc' with your actual path
+# Example: export CUDACXX=/usr/local/cuda-12.6/bin/nvcc
+export CUDACXX=/your/path/to/nvcc
+export SKBUILD_CMAKE_ARGS="-DCMAKE_CUDA_COMPILER=/your/path/to/nvcc"
+
+pip install pdhcg
 ```
 
 ## Verification

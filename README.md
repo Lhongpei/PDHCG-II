@@ -30,6 +30,7 @@ To use the standalone C++ solver, you must compile the project using CMake.
 ### Requirements
 * **GPU:** NVIDIA GPU with CUDA 12.4+.
 * **Build Tools:** CMake (≥ 3.20), GCC, NVCC.
+* **Distributed (Optional):** MPI (e.g., OpenMPI) and NCCL for multi-GPU support.
 
 ### Build from Source
 Clone the repository and compile the project using CMake.
@@ -49,6 +50,17 @@ cd PDHCG-II
 CUDACXX=/your/path/to/nvcc cmake -S . -B build
 cmake --build build --clean-first
 ```
+
+### Build with Multi-GPU Support
+
+To enable distributed multi-GPU solving, turn on the `PDHCG_COMPILE_DISTRIBUTED` CMake option:
+
+```bash
+cmake -S . -B build -DPDHCG_COMPILE_DISTRIBUTED=ON
+cmake --build build --clean-first
+```
+
+This requires MPI and NCCL to be installed on your system.
 
 ##  Usage (C++ Executable)
 
@@ -86,6 +98,29 @@ Solver Parameters:
 | --inner_iter_limit | int | Max iterations for the inner solver. | 1000 |
 | --inner_init_tol | double | Initial tolerance for the inner solver. | 1e-3 |
 | --inner_min_tol | double | Minimum tolerance for the inner solver. | 1e-9 |
+| --presolve | int | Enable (1) or disable (0) presolve. | 1 |
+
+**Distributed Options** (only available when built with `-DPDHCG_COMPILE_DISTRIBUTED=ON`):
+| Option | Type | Description | Default |
+| :--- | :--- | :--- | :--- |
+| --grid_size | string | 2D grid dimensions, format `r,c` (e.g., `2,4`). Must satisfy `r*c = num_procs`. | auto |
+| --partition_method | string | Matrix partition strategy: `uniform` or `nnz`. | nnz |
+| --permute_method | string | Permutation strategy: `none`, `random`, or `block`. | block |
+| --permute_block_size | int | Block size for block permutation. | 256 |
+
+### Multi-GPU Usage
+
+When built with distributed support, the same binary automatically detects whether it is launched with multiple MPI ranks and switches to the distributed solver:
+
+```bash
+
+# Multi-GPU on 4 GPUs
+mpirun -n 4 ./build/bin/pdhcg problem.mps ./output
+
+# Multi-GPU with a custom 2x2 process grid
+mpirun -n 4 ./build/bin/pdhcg problem.mps ./output --grid_size 2,2
+```
+
 ---
 
 ## Python Interface

@@ -42,6 +42,19 @@ pdhcg_result_t* solve_qp_problem(
 - `prob`: An QP problem built with `create_qp_problem`.
 - `params`: Solver parameters. If `NULL`, the solver will use default parameters.
 
+#### Distributed Solving
+
+For multi-GPU distributed solving, use `solve_qp_problem_distributed()` instead of `solve_qp_problem()`:
+
+```c
+pdhcg_result_t* solve_qp_problem_distributed(
+    const pdhg_parameters_t* params,
+    const qp_problem_t* original_problem    // only required on rank 0
+);
+```
+
+This requires PDHCG to be compiled with `-DPDHCG_COMPILE_DISTRIBUTED=ON` and launched via `mpirun`.
+
 #### Example: Solving a Small QP
 ```c
 #include "pdhcg.h"
