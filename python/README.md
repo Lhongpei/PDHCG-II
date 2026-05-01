@@ -20,7 +20,7 @@ It provides a high-level, Pythonic API for constructing, modifying, and solving 
 !!! note "CUDA Version and SpMVOp"
     PDHCG automatically detects your CUDA version at compile time:
 
-    - **CUDA 13+**: Uses cuSPARSE **SpMVOp** (fused SpMV + elementwise operations) for improved performance.
+    - **CUDA 13+**: Uses cuSPARSE **SpMVOp** for improved performance.
     - **CUDA 12.x**: Falls back to the standard **SpMV** API. No manual intervention is required.
 
 ### Install
